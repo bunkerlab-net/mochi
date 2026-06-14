@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-06-14
+
 - Route all startup and runtime output through the logger: the banner, database-migration progress, the Discord connection/ready messages, and per-command activity now go through pino instead of `console.log`/`ora` spinners, and dotenv's own startup banner is suppressed. Every line is now consistently formatted and parseable under `LOG_FORMAT`.
 - Add graceful shutdown: on `SIGINT`/`SIGTERM` the bot logs the signal, leaves any active voice channels, closes the Discord connection, and exits cleanly.
 - Shrink the runtime Docker image by installing production-only dependencies, so dev tooling (TypeScript, Biome, release tooling, type packages) is no longer shipped in the published image.
@@ -548,7 +550,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.0.2...HEAD
+[3.0.2]: https://github.com/bunkerlab-net/mochi/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/bunkerlab-net/mochi/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/bunkerlab-net/mochi/compare/v2.11.5...v3.0.0
 [2.11.5]: https://github.com/museofficial/muse/compare/v2.11.4...v2.11.5
