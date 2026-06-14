@@ -25,6 +25,7 @@ import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import logger from "../utils/logger.js";
 import { getYouTubeMediaSource } from "../utils/yt-dlp.js";
+import type Autoplay from "./autoplay.js";
 import type FileCacheProvider from "./file-cache.js";
 
 export enum MediaSource {
@@ -65,6 +66,9 @@ export interface PlayerEvents {
 
 export const DEFAULT_VOLUME = 100;
 
+// How many similar tracks to enqueue each time autoplay refills an empty queue.
+const AUTOPLAY_BATCH = 10;
+
 export default class {
   public voiceConnection: VoiceConnection | null = null;
   public status = STATUS.PAUSED;
@@ -84,14 +88,20 @@ export default class {
 
   private positionInSeconds = 0;
   private readonly fileCache: FileCacheProvider;
+  private readonly autoplay: Autoplay | undefined;
   private disconnectTimer: NodeJS.Timeout | null = null;
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
 
-  constructor(fileCache: FileCacheProvider, guildId: string) {
+  constructor(
+    fileCache: FileCacheProvider,
+    guildId: string,
+    autoplay?: Autoplay,
+  ) {
     this.fileCache = fileCache;
     this.guildId = guildId;
+    this.autoplay = autoplay;
   }
 
   async connect(channel: VoiceChannel): Promise<void> {
@@ -341,6 +351,9 @@ export default class {
 
     try {
       if (this.getCurrent() && this.status !== STATUS.PAUSED) {
+        await this.play();
+      } else if (this.status !== STATUS.PAUSED && (await this.tryAutoplay())) {
+        // Queue ran out — autoplay refilled it at the current position.
         await this.play();
       } else {
         await this.finishQueue();
@@ -798,27 +811,101 @@ export default class {
       newState.status === AudioPlayerStatus.Idle &&
       this.status === STATUS.PLAYING
     ) {
-      if (!this.canGoForward(1)) {
-        await this.finishQueue();
-        return;
-      }
-
       logger.debug("player", "track ended, advancing to next");
+      // forward() advances to the next song, refills via autoplay, or finishes
+      // the queue. Announce only when something is actually playing afterwards.
       await this.forward(1);
-      const currentSong = this.getCurrent();
-      if (!currentSong) {
+      if (!this.getCurrent()) {
         return;
       }
 
-      // Auto announce the next song if configured to
-      const settings = await getGuildSettings(this.guildId);
-      const { autoAnnounceNextSong } = settings;
-      if (autoAnnounceNextSong && this.currentChannel) {
-        await this.currentChannel.send({
-          embeds: [buildPlayingMessageEmbed(this)],
+      await this.announceNowPlaying();
+    }
+  }
+
+  /**
+   * When the queue empties, seed more music similar to the track that just
+   * finished and keep playing (radio mode). Controlled per-guild by the
+   * `autoplay` setting. Returns true if playback continued, false if the caller
+   * should fall back to the normal end-of-queue behavior.
+   */
+  private async tryAutoplay(): Promise<boolean> {
+    if (!this.autoplay) {
+      return false;
+    }
+
+    const settings = await getGuildSettings(this.guildId);
+    if (!settings.autoplay) {
+      return false;
+    }
+
+    // forward() advances past the end of the queue before calling us, so the
+    // seed is the track we just left (the last song in the queue).
+    const seed = this.getCurrent() ?? this.queue[this.queuePosition - 1];
+    if (!seed) {
+      return false;
+    }
+
+    try {
+      // Exclude everything already queued this session so we don't loop.
+      const exclude = new Set(this.queue.map((song) => song.url));
+      const related = await this.autoplay.getRelatedSongs(seed, {
+        limit: AUTOPLAY_BATCH,
+        exclude,
+      });
+
+      if (related.length === 0) {
+        return false;
+      }
+
+      for (const song of related) {
+        this.add({
+          ...song,
+          addedInChannelId: seed.addedInChannelId,
+          requestedBy: seed.requestedBy,
         });
       }
+
+      // The new tracks land at the current (past-the-end) position, so the
+      // caller can start playback without advancing the queue further.
+      logger.info(
+        "player",
+        `autoplay queued ${related.length} track(s) similar to "${seed.title}"`,
+      );
+
+      return true;
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.warn("player", `autoplay failed: ${reason}`);
+      return false;
     }
+  }
+
+  /**
+   * Announce the current track if the guild has `autoAnnounceNextSong` enabled.
+   * Posts to the text channel where the track was requested (`/play`), falling
+   * back to the voice channel's chat if that channel is gone. Shared by normal
+   * queue advances and autoplay so both honor the same setting and channel.
+   */
+  private async announceNowPlaying(): Promise<void> {
+    const settings = await getGuildSettings(this.guildId);
+    if (!settings.autoAnnounceNextSong) {
+      return;
+    }
+
+    const message = { embeds: [buildPlayingMessageEmbed(this)] };
+    const requestedChannelId = this.getCurrent()?.addedInChannelId;
+    const requestedChannel = requestedChannelId
+      ? this.currentChannel?.guild.channels.cache.get(requestedChannelId)
+      : undefined;
+
+    if (requestedChannel?.isTextBased()) {
+      await requestedChannel.send(message);
+      return;
+    }
+
+    // Fall back to the voice channel's chat if the request channel is gone.
+    await this.currentChannel?.send(message);
   }
 
   private async finishQueue(): Promise<void> {

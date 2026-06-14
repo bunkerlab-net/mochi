@@ -6,6 +6,7 @@ import logger from "./logger.js";
 const YT_DLP_VERSION_TIMEOUT_MS = 15_000;
 const YT_DLP_UPDATE_TIMEOUT_MS = 120_000;
 const YT_DLP_EXTRACT_TIMEOUT_MS = 45_000;
+const YT_DLP_MIX_TIMEOUT_MS = 30_000;
 
 interface YtDlpMediaDownload {
   readonly url?: string;
@@ -26,6 +27,25 @@ export interface YtDlpMediaSource {
   readonly url: string;
   readonly headers: Record<string, string>;
   readonly isLive: boolean;
+}
+
+export interface YtDlpMixEntry {
+  readonly id: string;
+  readonly title: string;
+  readonly uploader: string;
+  readonly duration: number;
+}
+
+interface YtDlpFlatEntry {
+  readonly id?: string;
+  readonly title?: string;
+  readonly uploader?: string;
+  readonly channel?: string;
+  readonly duration?: number;
+}
+
+interface YtDlpFlatPlaylist {
+  readonly entries?: readonly YtDlpFlatEntry[];
 }
 
 export interface YtDlpUpdateResult {
@@ -317,5 +337,68 @@ export const getYouTubeMediaSource = async (
     }
 
     throw error;
+  }
+};
+
+/**
+ * Fetch the related tracks from a video's auto-generated YouTube "radio" mix.
+ *
+ * YouTube exposes an endless, algorithmically-related playlist for any video
+ * under the id `RD<videoId>`. A flat-playlist dump returns the related entries
+ * (id, title, uploader, duration) without resolving each stream, which is enough
+ * to build queue metadata. Used to keep playback going (autoplay) when the queue
+ * empties. Degrades to an empty list on any failure so callers can fall back.
+ */
+export const getYouTubeMixEntries = async (
+  videoId: string,
+  limit: number,
+): Promise<YtDlpMixEntry[]> => {
+  const mixUrl = `https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}`;
+  logger.debug("yt-dlp", `fetching related mix for ${videoId}`);
+
+  try {
+    const { stdout } = await execa(
+      getExecutable(),
+      [
+        "--dump-single-json",
+        "--flat-playlist",
+        "--no-warnings",
+        "--no-cache-dir",
+        "--playlist-end",
+        limit.toString(),
+        mixUrl,
+      ],
+      {
+        timeout: YT_DLP_MIX_TIMEOUT_MS,
+      },
+    );
+
+    const { entries = [] } = JSON.parse(stdout) as YtDlpFlatPlaylist;
+
+    const seen = new Set<string>();
+    const related: YtDlpMixEntry[] = [];
+    for (const entry of entries) {
+      const { id } = entry;
+      // Keep only real YouTube videos (11-char ids); drop the seed and dupes.
+      if (id?.length !== 11 || id === videoId || seen.has(id)) {
+        continue;
+      }
+
+      seen.add(id);
+      related.push({
+        id,
+        title: entry.title ?? id,
+        uploader: entry.uploader ?? entry.channel ?? "",
+        duration: typeof entry.duration === "number" ? entry.duration : 0,
+      });
+    }
+
+    return related;
+  } catch (error: unknown) {
+    logger.warn(
+      "yt-dlp",
+      `failed to fetch related mix for ${videoId}: ${getExecaErrorMessage(error)}`,
+    );
+    return [];
   }
 };

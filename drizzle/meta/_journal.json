@@ -8,6 +8,13 @@
       "when": 1781455046901,
       "tag": "0000_watery_gladiator",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781463355717,
+      "tag": "0001_zippy_manta",
+      "breakpoints": true
     }
   ]
 }

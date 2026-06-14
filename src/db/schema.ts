@@ -71,6 +71,7 @@ export const setting = sqliteTable("Setting", {
   autoAnnounceNextSong: integer("autoAnnounceNextSong", { mode: "boolean" })
     .notNull()
     .default(false),
+  autoplay: integer("autoplay", { mode: "boolean" }).notNull().default(true),
   defaultVolume: integer("defaultVolume").notNull().default(100),
   defaultQueuePageSize: integer("defaultQueuePageSize").notNull().default(10),
   turnDownVolumeWhenPeopleSpeak: integer("turnDownVolumeWhenPeopleSpeak", {
