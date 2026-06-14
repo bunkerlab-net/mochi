@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-06-14
+
 - Rebrand from Muse to Mochi and migrate to a Bun-native stack: Bun 1.3.14 (runtime, package manager, and bundler) on Node.js 24 and TypeScript 6, replacing yarn.
 - Migrate the data layer to Prisma 7 with the Rust-free client and the libSQL driver adapter.
 - Switch developer tooling to Biome (replacing ESLint) and `hk` git hooks (replacing Husky).
@@ -532,7 +534,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[unreleased]: https://github.com/bunkerlab-net/mochi/compare/v2.11.5...HEAD
+[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/bunkerlab-net/mochi/compare/v2.11.5...v3.0.0
 [2.11.5]: https://github.com/museofficial/muse/compare/v2.11.4...v2.11.5
 [2.11.4]: https://github.com/museofficial/muse/compare/v2.11.3...v2.11.4
 [2.11.1]: https://github.com/museofficial/muse/compare/v2.11.0...v2.11.1
