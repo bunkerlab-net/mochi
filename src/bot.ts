@@ -9,7 +9,6 @@ import {
 } from "discord.js";
 import { Routes } from "discord-api-types/v10";
 import { inject, injectable } from "inversify";
-import ora, { type Ora } from "ora";
 import type Command from "./commands/index.js";
 import handleGuildCreate from "./events/guild-create.js";
 import handleVoiceStateUpdate from "./events/voice-state-update.js";
@@ -69,10 +68,10 @@ export default class {
       await this.handleInteraction(interaction);
     });
 
-    const spinner = ora("📡 connecting to Discord...").start();
+    logger.info("bot", "connecting to Discord...");
 
     this.client.once("clientReady", async () => {
-      await this.handleReady(spinner);
+      await this.handleReady();
     });
 
     this.client.on("error", (error) => logger.error("discord", error));
@@ -166,7 +165,7 @@ export default class {
     }
   }
 
-  private async handleReady(spinner: Ora): Promise<void> {
+  private async handleReady(): Promise<void> {
     const clientUser = this.client.user;
     if (!clientUser) {
       return;
@@ -179,14 +178,14 @@ export default class {
       this.config.DISCORD_TOKEN,
     );
     if (this.shouldRegisterCommandsOnBot) {
-      spinner.text = "📡 updating commands on bot...";
+      logger.info("bot", "updating commands on bot...");
       await rest.put(Routes.applicationCommands(clientUser.id), {
         body: this.commandsByName.map((command) =>
           command.slashCommand.toJSON(),
         ),
       });
     } else {
-      spinner.text = "📡 updating commands in all guilds...";
+      logger.info("bot", "updating commands in all guilds...");
 
       await Promise.all([
         ...this.client.guilds.cache.map(async (guild) => {
@@ -217,8 +216,14 @@ export default class {
       status: this.config.BOT_STATUS,
     });
 
-    spinner.succeed(
-      `Ready! Invite the bot with https://discordapp.com/oauth2/authorize?client_id=${this.client.user?.id ?? ""}&scope=bot%20applications.commands&permissions=36700160`,
+    logger.info(
+      "bot",
+      `ready! invite the bot with https://discordapp.com/oauth2/authorize?client_id=${this.client.user?.id ?? ""}&scope=bot%20applications.commands&permissions=36700160`,
     );
+  }
+
+  public async shutdown(): Promise<void> {
+    logger.debug("bot", "destroying Discord client");
+    await this.client.destroy();
   }
 }

@@ -7,9 +7,13 @@ import type { ConditionalKeys } from "type-fest";
 import xbytes from "xbytes";
 import logger from "../utils/logger.js";
 
-dotenv.config({
-  path: process.env["ENV_FILE"] ?? path.resolve(process.cwd(), ".env"),
-});
+const envPath = process.env["ENV_FILE"] ?? path.resolve(process.cwd(), ".env");
+
+// `quiet: true` suppresses dotenv's own startup banner ("injected env ...") so
+// every line of output flows through the logger instead.
+dotenv.config({ path: envPath, quiet: true });
+
+logger.debug("config", `loaded environment from ${envPath}`);
 
 export const DATA_DIR = path.resolve(
   process.env["DATA_DIR"] ? process.env["DATA_DIR"] : "./data",

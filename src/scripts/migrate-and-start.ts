@@ -3,7 +3,6 @@
 import { promises as fs } from "node:fs";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { type ExecaError, execa } from "execa";
-import ora from "ora";
 import { Prisma, PrismaClient } from "../generated/prisma/client.js";
 import { startBot } from "../index.js";
 import { DATA_DIR } from "../services/config.js";
@@ -69,7 +68,7 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
   // Banner
   logBanner();
 
-  const spinner = ora("Applying database migrations...").start();
+  logger.info("migrate", "applying database migrations...");
 
   if (await doesUserHaveExistingDatabase()) {
     if (!(await hasDatabaseBeenMigratedToPrisma())) {
@@ -77,8 +76,9 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
         await migrateFromSequelizeToPrisma();
       } catch (error) {
         if ((error as ExecaError).stderr) {
-          spinner.fail(
-            "Failed to apply database migrations (going from Sequelize to Prisma):",
+          logger.error(
+            "migrate",
+            "failed to apply database migrations (going from Sequelize to Prisma):",
           );
           logger.error("migrate", (error as ExecaError).stderr);
           process.exit(1);
@@ -93,15 +93,15 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
     await execa("prisma", ["migrate", "deploy"], { preferLocal: true });
   } catch (error: unknown) {
     if ((error as ExecaError).stderr) {
-      spinner.fail("Failed to apply database migrations:");
-      console.error((error as ExecaError).stderr);
+      logger.error("migrate", "failed to apply database migrations:");
+      logger.error("migrate", (error as ExecaError).stderr);
       process.exit(1);
     } else {
       throw error;
     }
   }
 
-  spinner.succeed("Database migrations applied.");
+  logger.info("migrate", "database migrations applied");
 
   await startBot();
 })();
