@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Route all startup and runtime output through the logger: the banner, database-migration progress, the Discord connection/ready messages, and per-command activity now go through pino instead of `console.log`/`ora` spinners, and dotenv's own startup banner is suppressed. Every line is now consistently formatted and parseable under `LOG_FORMAT`.
+- Add graceful shutdown: on `SIGINT`/`SIGTERM` the bot logs the signal, leaves any active voice channels, closes the Discord connection, and exits cleanly.
+- Shrink the runtime Docker image by installing production-only dependencies, so dev tooling (TypeScript, Biome, release tooling, type packages) is no longer shipped in the published image.
+
 ## [3.0.1] - 2026-06-14
 
 - Fix chapter splitting (`/play … split: true`): only the first chapter played because every chapter shared one cache entry keyed by the video URL; cache keys are now segment-aware (URL + offset + length).

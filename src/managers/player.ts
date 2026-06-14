@@ -24,4 +24,10 @@ export default class {
 
     return player;
   }
+
+  disconnectAll(): void {
+    for (const player of this.guildPlayers.values()) {
+      player.disconnect();
+    }
+  }
 }

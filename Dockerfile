@@ -34,7 +34,10 @@ COPY package.json bun.lock schema.prisma prisma.config.ts ./
 COPY migrations ./migrations
 COPY patches ./patches
 
-RUN bun install --frozen-lockfile
+# --production omits devDependencies (typescript, biome, release-it, @types/*).
+# The bundle and `prisma generate` only need runtime dependencies, so this
+# node_modules is what the runner copies — no dev tooling ships in the image.
+RUN bun install --frozen-lockfile --production
 
 FROM dependencies AS builder
 
