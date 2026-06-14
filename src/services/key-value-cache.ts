@@ -1,5 +1,7 @@
+import { eq } from "drizzle-orm";
 import { injectable } from "inversify";
-import { prisma } from "../utils/db.js";
+import { db } from "../db/index.js";
+import { keyValueCache } from "../db/schema.js";
 import logger from "../utils/logger.js";
 
 type Seconds = number;
@@ -31,11 +33,11 @@ export default class KeyValueCacheProvider {
       throw new Error(`Cache key ${key} is too short.`);
     }
 
-    const cachedResult = await prisma.keyValueCache.findUnique({
-      where: {
-        key,
-      },
-    });
+    const cachedResult = db
+      .select()
+      .from(keyValueCache)
+      .where(eq(keyValueCache.key, key))
+      .get();
 
     if (cachedResult) {
       if (new Date() < cachedResult.expiresAt) {
@@ -43,11 +45,7 @@ export default class KeyValueCacheProvider {
         return JSON.parse(cachedResult.value) as F;
       }
 
-      await prisma.keyValueCache.delete({
-        where: {
-          key,
-        },
-      });
+      db.delete(keyValueCache).where(eq(keyValueCache.key, key)).run();
     }
 
     logger.debug("cache", `cache miss: ${key}`);
@@ -57,20 +55,13 @@ export default class KeyValueCacheProvider {
     // Save result
     const value = JSON.stringify(result);
     const expiresAt = futureTimeToDate(expiresIn);
-    await prisma.keyValueCache.upsert({
-      where: {
-        key,
-      },
-      update: {
-        value,
-        expiresAt,
-      },
-      create: {
-        key,
-        value,
-        expiresAt,
-      },
-    });
+    db.insert(keyValueCache)
+      .values({ key, value, expiresAt })
+      .onConflictDoUpdate({
+        target: keyValueCache.key,
+        set: { value, expiresAt, updatedAt: new Date() },
+      })
+      .run();
 
     return result;
   }

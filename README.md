@@ -3,7 +3,7 @@
 </p>
 
 > [!IMPORTANT]
-> Mochi is a fork of [Muse](https://github.com/museofficial/muse), the self-hosted Discord music bot originally created by Max Isom. It has been rebuilt on the [Bun](https://bun.com) runtime with a modern toolchain (TypeScript 6, Prisma 7, Biome) and is maintained under the [`bunkerlab-net`](https://github.com/bunkerlab-net) organization.
+> Mochi is a fork of [Muse](https://github.com/museofficial/muse), the self-hosted Discord music bot originally created by Max Isom. It has been rebuilt on the [Bun](https://bun.com) runtime with a modern toolchain (TypeScript 6, Drizzle, Biome) and is maintained under the [`bunkerlab-net`](https://github.com/bunkerlab-net) organization.
 >
 > Docker images are published to `ghcr.io/bunkerlab-net/mochi`.
 
@@ -32,7 +32,7 @@ Mochi runs entirely on [Bun](https://bun.com) — runtime, package manager, and 
 - **Runtime:** Bun `1.3.14` (Node.js 24+ compatible)
 - **Language:** TypeScript 6 (strict)
 - **Discord:** discord.js 14 + `@discordjs/voice`
-- **Database:** Prisma 7 with the Rust-free client over SQLite (libSQL driver adapter)
+- **Database:** Drizzle ORM over SQLite using Bun's built-in `bun:sqlite`
 - **Media:** `ffmpeg` + `yt-dlp`
 - **Tooling:** Biome (lint/format), `hk` (git hooks)
 

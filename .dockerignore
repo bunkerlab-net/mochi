@@ -2,11 +2,10 @@
 **
 
 # Except the following:
-!migrations/
+!drizzle/
 !patches/
 !src/
+!bunfig.toml
 !package.json
 !bun.lock
 !tsconfig.json
-!schema.prisma
-!prisma.config.ts

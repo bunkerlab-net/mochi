@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Route all startup and runtime output through the logger: the banner, database-migration progress, the Discord connection/ready messages, and per-command activity now go through pino instead of `console.log`/`ora` spinners, and dotenv's own startup banner is suppressed. Every line is now consistently formatted and parseable under `LOG_FORMAT`.
 - Add graceful shutdown: on `SIGINT`/`SIGTERM` the bot logs the signal, leaves any active voice channels, closes the Discord connection, and exits cleanly.
 - Shrink the runtime Docker image by installing production-only dependencies, so dev tooling (TypeScript, Biome, release tooling, type packages) is no longer shipped in the published image.
+- Migrate the data layer from Prisma to [Drizzle ORM](https://orm.drizzle.team) on Bun's built-in `bun:sqlite`, dropping the Prisma query engine, the Prisma CLI, and the libSQL client. This removes roughly 270 MB from the image and runs migrations in-process at startup instead of shelling out. Existing databases are adopted automatically with no data loss, and stored dates remain byte-compatible. Note: a remote libSQL/Turso `DATABASE_URL` is no longer supported (the database is a local SQLite file); a pre-Prisma (Sequelize) database must first be upgraded with a 3.0.1-or-earlier release.
 
 ## [3.0.1] - 2026-06-14
 

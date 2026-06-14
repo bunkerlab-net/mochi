@@ -20,23 +20,22 @@ RUN apk add --no-cache \
     && ln -s /opt/yt-dlp/bin/yt-dlp /usr/local/bin/yt-dlp \
     && chown -R bun:bun /opt/yt-dlp
 
-# Install dependencies (with build tools for native modules) and generate the Prisma client
+# Install dependencies (with build tools for native modules)
 FROM base AS dependencies
 
 WORKDIR /usr/app
 
 RUN apk add --no-cache build-base python3
 
-# Schema + config are needed by the postinstall `prisma generate` step;
+# bunfig.toml keeps drizzle-orm's optional driver peers out of the install;
 # patches/ holds the bun patch that fixes the @discordjs/opus source build
 # on linux/arm64 (must be present before install)
-COPY package.json bun.lock schema.prisma prisma.config.ts ./
-COPY migrations ./migrations
+COPY package.json bun.lock bunfig.toml ./
 COPY patches ./patches
 
-# --production omits devDependencies (typescript, biome, release-it, @types/*).
-# The bundle and `prisma generate` only need runtime dependencies, so this
-# node_modules is what the runner copies — no dev tooling ships in the image.
+# --production omits devDependencies (typescript, biome, drizzle-kit, release-it,
+# @types/*). The bundle only needs runtime dependencies, so this node_modules is
+# what the runner copies — no dev tooling ships in the image.
 RUN bun install --frozen-lockfile --production
 
 FROM dependencies AS builder
@@ -45,8 +44,6 @@ WORKDIR /usr/app
 
 COPY . .
 
-# Regenerate the Prisma client against the full source tree, then bundle with bun
-RUN bun prisma generate
 RUN bun run build
 
 # Only keep what's necessary to run
@@ -63,9 +60,9 @@ WORKDIR /usr/app
 
 COPY --from=builder --chown=bun:bun /usr/app/node_modules ./node_modules
 COPY --from=builder --chown=bun:bun /usr/app/dist ./dist
-COPY --from=builder --chown=bun:bun /usr/app/src/generated ./src/generated
-COPY --chown=bun:bun package.json bun.lock schema.prisma prisma.config.ts ./
-COPY --chown=bun:bun migrations ./migrations
+# Migrations are read from disk at runtime by the in-process migrator.
+COPY --chown=bun:bun drizzle ./drizzle
+COPY --chown=bun:bun package.json ./
 
 ARG COMMIT_HASH=unknown
 ARG BUILD_DATE=unknown

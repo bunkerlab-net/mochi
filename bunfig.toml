@@ -4,3 +4,9 @@ minimumReleaseAge = 86400
 # When true, bun install will not update bun.lock. (Default false)
 # If package.json and the existing bun.lock are not in agreement, this will error.
 frozenLockfile = false
+# drizzle-orm declares every database driver it supports (Prisma, libSQL,
+# mysql2, postgres, ...) as an optional peer dependency, and Bun installs
+# optional peers by default. We only use the built-in bun:sqlite driver, so
+# disabling peer auto-install keeps those drivers out of node_modules and the
+# image. All runtime dependencies are declared explicitly in package.json.
+peer = false

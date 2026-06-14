@@ -7,7 +7,7 @@
     /* Modules */
     "module": "Preserve",
     "moduleResolution": "bundler",
-    "types": ["node"],
+    "types": ["node", "bun"],
     "resolveJsonModule": true,
 
     /* Interop */
@@ -36,6 +36,6 @@
     "allowUnusedLabels": false,
     "allowUnreachableCode": false
   },
-  "include": ["src", "prisma.config.ts"],
+  "include": ["src", "drizzle.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
