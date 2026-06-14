@@ -1,6 +1,6 @@
 import { injectable } from "inversify";
 import { prisma } from "../utils/db.js";
-import debug from "../utils/debug.js";
+import logger from "../utils/logger.js";
 
 type Seconds = number;
 
@@ -39,7 +39,7 @@ export default class KeyValueCacheProvider {
 
     if (cachedResult) {
       if (new Date() < cachedResult.expiresAt) {
-        debug(`Cache hit: ${key}`);
+        logger.debug("cache", `cache hit: ${key}`);
         return JSON.parse(cachedResult.value) as F;
       }
 
@@ -50,7 +50,7 @@ export default class KeyValueCacheProvider {
       });
     }
 
-    debug(`Cache miss: ${key}`);
+    logger.debug("cache", `cache miss: ${key}`);
 
     const result = await func(...(options as unknown as never[]));
 

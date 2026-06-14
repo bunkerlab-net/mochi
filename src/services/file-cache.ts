@@ -5,7 +5,7 @@ import PQueue from "p-queue";
 import type { FileCache } from "../generated/prisma/client.js";
 import { TYPES } from "../types.js";
 import { prisma } from "../utils/db.js";
-import debug from "../utils/debug.js";
+import logger from "../utils/logger.js";
 import type Config from "./config.js";
 
 @injectable()
@@ -110,7 +110,7 @@ export default class FileCacheProvider {
   }
 
   private async evictOldest() {
-    debug("Evicting oldest files...");
+    logger.debug("file-cache", "Evicting oldest files...");
 
     let totalSizeBytes = await this.getDiskUsageInBytes();
     let numOfEvictedFiles = 0;
@@ -129,7 +129,7 @@ export default class FileCacheProvider {
           },
         });
         await fs.unlink(path.join(this.config.CACHE_DIR, oldest.hash));
-        debug(`${oldest.hash} has been evicted`);
+        logger.debug("file-cache", `${oldest.hash} has been evicted`);
         numOfEvictedFiles++;
       }
 
@@ -137,9 +137,13 @@ export default class FileCacheProvider {
     }
 
     if (numOfEvictedFiles > 0) {
-      debug(`${numOfEvictedFiles} files have been evicted`);
+      logger.debug(
+        "file-cache",
+        `${numOfEvictedFiles} files have been evicted`,
+      );
     } else {
-      debug(
+      logger.debug(
+        "file-cache",
         `No files needed to be evicted. Total size of the cache is currently ${totalSizeBytes} bytes, and the cache limit is ${this.config.CACHE_LIMIT_IN_BYTES} bytes.`,
       );
     }
@@ -156,7 +160,8 @@ export default class FileCacheProvider {
         });
 
         if (!model) {
-          debug(
+          logger.debug(
+            "file-cache",
             `${dirent.name} was present on disk but was not in the database. Removing from disk.`,
           );
           await fs.unlink(path.join(this.config.CACHE_DIR, dirent.name));
@@ -171,7 +176,8 @@ export default class FileCacheProvider {
       try {
         await fs.access(filePath);
       } catch {
-        debug(
+        logger.debug(
+          "file-cache",
           `${model.hash} was present in database but was not on disk. Removing from database.`,
         );
         await prisma.fileCache.delete({

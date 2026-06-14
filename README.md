@@ -116,6 +116,13 @@ For local development, `bun dev` runs Mochi with file watching and auto-reload.
 
 All settings below are environment variables (set them in your `.env` file or container environment).
 
+### Logging
+
+Mochi logs through [pino](https://getpino.io). Two environment variables control output:
+
+- `LOG_FORMAT` (default `plain`): `plain` for human-readable colorized lines, `json` for one JSON record per line, or `ecs` for [Elastic Common Schema](https://www.elastic.co/guide/en/ecs/current/index.html) JSON (for log shippers).
+- `LOG_LEVEL` (default `info`): one of `trace`, `debug`, `info`, `warn`, `error`, `fatal`, or `silent`. Operational events and failures log at `info` and above; set `LOG_LEVEL=debug` for verbose per-component detail.
+
 ### Cache
 
 Mochi limits the total cache size to ~2 GB by default. Change it with `CACHE_LIMIT`, e.g. `CACHE_LIMIT=512MB` or `CACHE_LIMIT=10GB`.

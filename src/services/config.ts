@@ -5,6 +5,7 @@ import { ActivityType, type PresenceStatusData } from "discord.js";
 import { injectable } from "inversify";
 import type { ConditionalKeys } from "type-fest";
 import xbytes from "xbytes";
+import logger from "../utils/logger.js";
 
 dotenv.config({
   path: process.env["ENV_FILE"] ?? path.resolve(process.cwd(), ".env"),
@@ -74,7 +75,7 @@ export default class Config {
   constructor() {
     for (const [key, value] of Object.entries(CONFIG_MAP)) {
       if (typeof value === "undefined") {
-        console.error(`Missing environment variable for ${key}`);
+        logger.error("config", `missing environment variable for ${key}`);
         process.exit(1);
       }
 

@@ -17,8 +17,8 @@ import container from "./inversify.config.js";
 import type Config from "./services/config.js";
 import { TYPES } from "./types.js";
 import { isUserInVoice } from "./utils/channels.js";
-import debug from "./utils/debug.js";
 import errorMsg from "./utils/error-msg.js";
+import logger from "./utils/logger.js";
 import registerCommandsOnGuild from "./utils/register-commands-on-guild.js";
 
 @injectable()
@@ -47,7 +47,7 @@ export default class {
       try {
         command.slashCommand.toJSON();
       } catch (error) {
-        console.error(error);
+        logger.error("bot", error);
         throw new Error(
           `Could not serialize /${command.slashCommand.name ?? ""} to JSON`,
         );
@@ -75,8 +75,8 @@ export default class {
       await this.handleReady(spinner);
     });
 
-    this.client.on("error", console.error);
-    this.client.on("debug", debug);
+    this.client.on("error", (error) => logger.error("discord", error));
+    this.client.on("debug", (message) => logger.debug("discord", message));
 
     this.client.on("guildCreate", handleGuildCreate);
     this.client.on("voiceStateUpdate", handleVoiceStateUpdate);
@@ -87,7 +87,7 @@ export default class {
     try {
       await this.dispatchInteraction(interaction);
     } catch (error: unknown) {
-      debug(error);
+      logger.error("bot", error);
 
       // This can fail if the message was deleted, and we don't want to crash the whole bot
       try {
@@ -113,6 +113,11 @@ export default class {
       if (!command || !interaction.isChatInputCommand()) {
         return;
       }
+
+      logger.info(
+        "bot",
+        `/${interaction.commandName} invoked by ${interaction.user.username} in "${interaction.guild?.name ?? "DM"}"`,
+      );
 
       if (!interaction.guild) {
         await interaction.reply(errorMsg("you can't use this bot in a DM"));
@@ -167,7 +172,7 @@ export default class {
       return;
     }
 
-    debug(generateDependencyReport());
+    logger.debug("bot", generateDependencyReport());
 
     // Update commands
     const rest = new REST({ version: "10" }).setToken(

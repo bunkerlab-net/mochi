@@ -22,8 +22,8 @@ import { WriteStream } from "fs-capacitor";
 import { hashSync } from "hasha";
 import type { Setting } from "../generated/prisma/client.js";
 import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
-import debug from "../utils/debug.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
+import logger from "../utils/logger.js";
 import { getYouTubeMediaSource } from "../utils/yt-dlp.js";
 import type FileCacheProvider from "./file-cache.js";
 
@@ -123,9 +123,9 @@ export default class {
       if (stateTransitions.length > 10) {
         stateTransitions.shift();
       }
-
-      debug(
-        `Voice connection state changed: ${oldState.status} -> ${newState.status}`,
+      logger.debug(
+        "player",
+        `voice connection state changed: ${oldState.status} -> ${newState.status}`,
       );
 
       if (
@@ -287,6 +287,11 @@ export default class {
       this.status = STATUS.PLAYING;
       this.nowPlaying = currentSong;
 
+      logger.info(
+        "player",
+        `now playing "${currentSong.title}" [${this.queuePosition + 1}/${this.queue.length}]`,
+      );
+
       if (currentSong.url === this.lastSongURL) {
         this.startTrackingPosition();
       } else {
@@ -295,20 +300,24 @@ export default class {
         this.lastSongURL = currentSong.url;
       }
     } catch (error: unknown) {
-      debug(
-        `Failed to start ${currentSong.title}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      const reason = error instanceof Error ? error.message : String(error);
 
       // A single unplayable track shouldn't halt the queue or surface to the
       // caller as a command error. If a later track exists, skip to it and treat
       // the failure as recovered; otherwise stop and surface the error.
       if (this.getQueue().length === 0) {
+        logger.error(
+          "player",
+          `"${currentSong.title}" failed to start and the queue is empty: ${reason}`,
+        );
         await this.finishQueue();
         throw error;
       }
 
+      logger.warn(
+        "player",
+        `"${currentSong.title}" failed to start, skipping to next track: ${reason}`,
+      );
       await this.forward(1);
     }
   }
@@ -416,9 +425,14 @@ export default class {
 
   manualForward(skip: number): void {
     if (this.canGoForward(skip)) {
+      const from = this.queuePosition;
       this.queuePosition += skip;
       this.positionInSeconds = 0;
       this.stopTrackingPosition();
+      logger.debug(
+        "player",
+        `queue position ${from} -> ${this.queuePosition} (forward ${skip})`,
+      );
     } else {
       throw new Error("No songs in queue to forward to.");
     }
@@ -430,9 +444,14 @@ export default class {
 
   async back(): Promise<void> {
     if (this.canGoBack()) {
+      const from = this.queuePosition;
       this.queuePosition--;
       this.positionInSeconds = 0;
       this.stopTrackingPosition();
+      logger.debug(
+        "player",
+        `queue position ${from} -> ${this.queuePosition} (back)`,
+      );
 
       if (this.status !== STATUS.PAUSED) {
         await this.play();
@@ -559,10 +578,14 @@ export default class {
     song: QueuedSong,
     options: { seek?: number | undefined; to?: number | undefined } = {},
   ): Promise<Readable> {
-    if (this.status === STATUS.PLAYING) {
-      this.audioPlayer?.stop();
-    } else if (this.status === STATUS.PAUSED) {
-      this.audioPlayer?.stop(true);
+    if (this.status === STATUS.PLAYING || this.status === STATUS.PAUSED) {
+      // This stop() deliberately tears down the current stream so a new one can
+      // take over (skip/back/seek). The old player still has the auto-advance
+      // `Idle` listener attached, and stop() emits `Idle` synchronously — unless
+      // we detach it first, that handler fires an extra forward(1) and skips a
+      // track. The replacement player re-attaches its own via attachListeners().
+      this.audioPlayer?.removeAllListeners(AudioPlayerStatus.Idle);
+      this.audioPlayer?.stop(this.status === STATUS.PAUSED);
     }
 
     if (song.source === MediaSource.HLS) {
@@ -606,7 +629,12 @@ export default class {
         song.length < MAX_CACHE_LENGTH_SECONDS &&
         !options.seek;
 
-      debug(shouldCacheVideo ? "Caching video" : "Not caching video");
+      logger.debug(
+        "player",
+        shouldCacheVideo
+          ? `caching video for "${song.title}"`
+          : `not caching video for "${song.title}"`,
+      );
 
       ffmpegInputOptions.push(
         ...[
@@ -775,6 +803,7 @@ export default class {
         return;
       }
 
+      logger.debug("player", "track ended, advancing to next");
       await this.forward(1);
       const currentSong = this.getCurrent();
       if (!currentSong) {
@@ -793,6 +822,7 @@ export default class {
   }
 
   private async finishQueue(): Promise<void> {
+    logger.info("player", "reached end of queue");
     this.status = STATUS.IDLE;
     this.audioPlayer?.stop(true);
 
@@ -852,7 +882,7 @@ export default class {
           }
         })
         .on("start", (command) => {
-          debug(`Spawned ffmpeg with ${command}`);
+          logger.debug("player", `spawned ffmpeg with ${command}`);
         });
 
       stream.pipe(capacitor);

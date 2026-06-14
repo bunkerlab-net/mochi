@@ -11,6 +11,7 @@ import createDatabaseUrl, {
   createDatabasePath,
 } from "../utils/create-database-url.js";
 import logBanner from "../utils/log-banner.js";
+import logger from "../utils/logger.js";
 
 process.env["DATABASE_URL"] =
   process.env["DATABASE_URL"] ?? createDatabaseUrl(DATA_DIR);
@@ -79,7 +80,7 @@ const hasDatabaseBeenMigratedToPrisma = async () => {
           spinner.fail(
             "Failed to apply database migrations (going from Sequelize to Prisma):",
           );
-          console.error((error as ExecaError).stderr);
+          logger.error("migrate", (error as ExecaError).stderr);
           process.exit(1);
         } else {
           throw error;
