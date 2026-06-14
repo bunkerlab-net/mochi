@@ -20,7 +20,7 @@ import type { Snowflake, VoiceChannel } from "discord.js";
 import ffmpeg from "fluent-ffmpeg";
 import { WriteStream } from "fs-capacitor";
 import { hashSync } from "hasha";
-import type { Setting } from "../generated/prisma/client.js";
+import type { Setting } from "../db/schema.js";
 import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import logger from "../utils/logger.js";

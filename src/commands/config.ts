@@ -4,8 +4,10 @@ import {
   EmbedBuilder,
   PermissionFlagsBits,
 } from "discord.js";
+import { eq } from "drizzle-orm";
 import { injectable } from "inversify";
-import { prisma } from "../utils/db.js";
+import { db } from "../db/index.js";
+import { setting } from "../db/schema.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import { getGuildId } from "../utils/interaction.js";
 import type Command from "./index.js";
@@ -195,10 +197,10 @@ export default class implements Command {
       throw new Error("invalid limit");
     }
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { playlistLimit: limit },
-    });
+    db.update(setting)
+      .set({ playlistLimit: limit })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 limit updated");
   }
@@ -208,10 +210,10 @@ export default class implements Command {
   ): Promise<void> {
     const delay = interaction.options.getInteger("delay", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { secondsToWaitAfterQueueEmpties: delay },
-    });
+    db.update(setting)
+      .set({ secondsToWaitAfterQueueEmpties: delay })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 wait delay updated");
   }
@@ -221,10 +223,10 @@ export default class implements Command {
   ): Promise<void> {
     const value = interaction.options.getBoolean("value", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { leaveIfNoListeners: value },
-    });
+    db.update(setting)
+      .set({ leaveIfNoListeners: value })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 leave setting updated");
   }
@@ -234,10 +236,10 @@ export default class implements Command {
   ): Promise<void> {
     const value = interaction.options.getBoolean("value", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { queueAddResponseEphemeral: value },
-    });
+    db.update(setting)
+      .set({ queueAddResponseEphemeral: value })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 queue add notification setting updated");
   }
@@ -247,10 +249,10 @@ export default class implements Command {
   ): Promise<void> {
     const value = interaction.options.getBoolean("value", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { autoAnnounceNextSong: value },
-    });
+    db.update(setting)
+      .set({ autoAnnounceNextSong: value })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 auto announce setting updated");
   }
@@ -260,10 +262,10 @@ export default class implements Command {
   ): Promise<void> {
     const value = interaction.options.getInteger("level", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { defaultVolume: value },
-    });
+    db.update(setting)
+      .set({ defaultVolume: value })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 volume setting updated");
   }
@@ -273,10 +275,10 @@ export default class implements Command {
   ): Promise<void> {
     const value = interaction.options.getInteger("page-size", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { defaultQueuePageSize: value },
-    });
+    db.update(setting)
+      .set({ defaultQueuePageSize: value })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 default queue page size updated");
   }
@@ -286,10 +288,10 @@ export default class implements Command {
   ): Promise<void> {
     const value = interaction.options.getBoolean("value", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { turnDownVolumeWhenPeopleSpeak: value },
-    });
+    db.update(setting)
+      .set({ turnDownVolumeWhenPeopleSpeak: value })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 turn down volume setting updated");
   }
@@ -299,10 +301,10 @@ export default class implements Command {
   ): Promise<void> {
     const value = interaction.options.getInteger("volume", true);
 
-    await prisma.setting.update({
-      where: { guildId: getGuildId(interaction) },
-      data: { turnDownVolumeWhenPeopleSpeakTarget: value },
-    });
+    db.update(setting)
+      .set({ turnDownVolumeWhenPeopleSpeakTarget: value })
+      .where(eq(setting.guildId, getGuildId(interaction)))
+      .run();
 
     await interaction.reply("👍 turn down volume target setting updated");
   }

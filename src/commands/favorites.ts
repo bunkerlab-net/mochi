@@ -4,11 +4,13 @@ import type {
   AutocompleteInteraction,
   ChatInputCommandInteraction,
 } from "discord.js";
+import { and, eq } from "drizzle-orm";
 import { inject, injectable } from "inversify";
 import { Pagination } from "pagination.djs";
+import { db } from "../db/index.js";
+import { favoriteQuery } from "../db/schema.js";
 import type AddQueryToQueue from "../services/add-query-to-queue.js";
 import { TYPES } from "../types.js";
-import { prisma } from "../utils/db.js";
 import { getGuild, getGuildId, getMemberUserId } from "../utils/interaction.js";
 import type Command from "./index.js";
 
@@ -115,11 +117,11 @@ export default class implements Command {
     const subcommand = interaction.options.getSubcommand();
     const query = interaction.options.getString("name", true).trim();
 
-    const favorites = await prisma.favoriteQuery.findMany({
-      where: {
-        guildId: getGuildId(interaction),
-      },
-    });
+    const favorites = db
+      .select()
+      .from(favoriteQuery)
+      .where(eq(favoriteQuery.guildId, getGuildId(interaction)))
+      .all();
 
     let results =
       query === ""
@@ -149,12 +151,16 @@ export default class implements Command {
   private async use(interaction: ChatInputCommandInteraction) {
     const name = interaction.options.getString("name", true).trim();
 
-    const favorite = await prisma.favoriteQuery.findFirst({
-      where: {
-        name,
-        guildId: getGuildId(interaction),
-      },
-    });
+    const favorite = db
+      .select()
+      .from(favoriteQuery)
+      .where(
+        and(
+          eq(favoriteQuery.name, name),
+          eq(favoriteQuery.guildId, getGuildId(interaction)),
+        ),
+      )
+      .get();
 
     if (!favorite) {
       throw new Error("no favorite with that name exists");
@@ -171,11 +177,11 @@ export default class implements Command {
   }
 
   private async list(interaction: ChatInputCommandInteraction) {
-    const favorites = await prisma.favoriteQuery.findMany({
-      where: {
-        guildId: getGuildId(interaction),
-      },
-    });
+    const favorites = db
+      .select()
+      .from(favoriteQuery)
+      .where(eq(favoriteQuery.guildId, getGuildId(interaction)))
+      .all();
 
     if (favorites.length === 0) {
       await interaction.reply("there aren't any favorites yet");
@@ -204,25 +210,29 @@ export default class implements Command {
     const name = interaction.options.getString("name", true).trim();
     const query = interaction.options.getString("query", true).trim();
 
-    const existingFavorite = await prisma.favoriteQuery.findFirst({
-      where: {
-        guildId: getGuildId(interaction),
-        name,
-      },
-    });
+    const existingFavorite = db
+      .select()
+      .from(favoriteQuery)
+      .where(
+        and(
+          eq(favoriteQuery.guildId, getGuildId(interaction)),
+          eq(favoriteQuery.name, name),
+        ),
+      )
+      .get();
 
     if (existingFavorite) {
       throw new Error("a favorite with that name already exists");
     }
 
-    await prisma.favoriteQuery.create({
-      data: {
+    db.insert(favoriteQuery)
+      .values({
         authorId: getMemberUserId(interaction),
         guildId: getGuildId(interaction),
         name,
         query,
-      },
-    });
+      })
+      .run();
 
     await interaction.reply("👍 favorite created");
   }
@@ -230,12 +240,16 @@ export default class implements Command {
   private async remove(interaction: ChatInputCommandInteraction) {
     const name = interaction.options.getString("name", true).trim();
 
-    const favorite = await prisma.favoriteQuery.findFirst({
-      where: {
-        name,
-        guildId: getGuildId(interaction),
-      },
-    });
+    const favorite = db
+      .select()
+      .from(favoriteQuery)
+      .where(
+        and(
+          eq(favoriteQuery.name, name),
+          eq(favoriteQuery.guildId, getGuildId(interaction)),
+        ),
+      )
+      .get();
 
     if (!favorite) {
       throw new Error("no favorite with that name exists");
@@ -251,7 +265,7 @@ export default class implements Command {
       throw new Error("you can only remove your own favorites");
     }
 
-    await prisma.favoriteQuery.delete({ where: { id: favorite.id } });
+    db.delete(favoriteQuery).where(eq(favoriteQuery.id, favorite.id)).run();
 
     await interaction.reply("👍 favorite removed");
   }
