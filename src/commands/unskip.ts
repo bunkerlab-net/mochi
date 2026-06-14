@@ -27,13 +27,16 @@ export default class implements Command {
     const player = this.playerManager.get(getGuildId(interaction));
 
     try {
-      await player.back();
-      await interaction.reply({
-        content: "back 'er up'",
-        embeds: player.getCurrent() ? [buildPlayingMessageEmbed(player)] : [],
-      });
+      // Defer up front: going back re-resolves the previous track's media URL,
+      // which can take longer than Discord's 3s interaction ack window.
+      await Promise.all([player.back(), interaction.deferReply()]);
     } catch (_: unknown) {
       throw new Error("no song to go back to");
     }
+
+    await interaction.editReply({
+      content: "back 'er up'",
+      embeds: player.getCurrent() ? [buildPlayingMessageEmbed(player)] : [],
+    });
   }
 }

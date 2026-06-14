@@ -39,13 +39,16 @@ export default class implements Command {
     const player = this.playerManager.get(getGuildId(interaction));
 
     try {
-      await player.forward(numToSkip);
-      await interaction.reply({
-        content: "keep 'er movin'",
-        embeds: player.getCurrent() ? [buildPlayingMessageEmbed(player)] : [],
-      });
+      // Defer up front: forwarding resolves the next track's media URL, which
+      // can take longer than Discord's 3s interaction ack window.
+      await Promise.all([player.forward(numToSkip), interaction.deferReply()]);
     } catch (_: unknown) {
       throw new Error("no song to skip to");
     }
+
+    await interaction.editReply({
+      content: "keep 'er movin'",
+      embeds: player.getCurrent() ? [buildPlayingMessageEmbed(player)] : [],
+    });
   }
 }
