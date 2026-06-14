@@ -57,7 +57,7 @@ You can run Mochi with Docker (recommended) or from source with Bun.
 Available image tags:
 
 - `:latest` — the most recent release
-- `:2`, `:2.11`, `:2.11.5` — semver major / minor / exact
+- `:3`, `:3.0`, `:3.0.0` — semver major / minor / exact
 - `:yt-dlp-latest` — the latest release rebuilt with the newest available `yt-dlp`
 
 Replace the empty config values below:

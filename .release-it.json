@@ -6,6 +6,9 @@
       "addVersionUrl": true
     }
   },
+  "git": {
+    "tagName": "v${version}"
+  },
   "npm": {
     "publish": false
   }

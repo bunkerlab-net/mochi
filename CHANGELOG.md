@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Rebrand from Muse to Mochi and migrate to a Bun-native stack: Bun 1.3.14 (runtime, package manager, and bundler) on Node.js 24 and TypeScript 6, replacing yarn.
+- Migrate the data layer to Prisma 7 with the Rust-free client and the libSQL driver adapter.
+- Switch developer tooling to Biome (replacing ESLint) and `hk` git hooks (replacing Husky).
+- Run the Docker image as the non-root `bun` user and publish multi-arch (`linux/amd64` and `linux/arm64`) images only to `ghcr.io/bunkerlab-net/mochi`, built natively on pinned runners with layer caching.
+- Fix containerized playback on `linux/arm64` by correcting the `@discordjs/opus` source build and loading the `@snazzah/davey` voice binding from `node_modules` at runtime.
+- Replace deprecated discord.js APIs (`ready` → `clientReady` and `ephemeral` → message flags).
+
 ## [2.11.5] - 2026-06-04
 
 - Fix queue-empty crashes when auto-announce is enabled or playback ends without a next song.
