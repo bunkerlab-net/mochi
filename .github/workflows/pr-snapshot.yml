@@ -9,27 +9,22 @@ env:
 
 jobs:
   build:
-    name: Build snapshot
+    name: Build snapshot ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: read
     strategy:
+      fail-fast: false
       matrix:
-        runner-platform:
-          - ubuntu-latest
-          - namespace-profile-default-arm64
         include:
-          - runner-platform: ubuntu-latest
-            build-arch: linux/amd64
-          - runner-platform: namespace-profile-default-arm64
-            build-arch: linux/arm64
-    runs-on: ${{ matrix.runner-platform }}
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            platform_pair: linux-amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            platform_pair: linux-arm64
     steps:
-      - name: Prepare
-        run: |
-          platform=${{ matrix.build-arch }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
@@ -56,17 +51,18 @@ jobs:
         id: build
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
-          outputs: type=docker,dest=/tmp/image-${{ env.PLATFORM_PAIR }}.tar
-          platforms: ${{ matrix.build-arch }}
-          tags: |
-            ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-${{ env.PLATFORM_PAIR }}
+          outputs: type=docker,dest=/tmp/image-${{ matrix.platform_pair }}.tar
+          platforms: ${{ matrix.platform }}
+          tags: ${{ env.REGISTRY_IMAGE }}:${{ github.sha }}-${{ matrix.platform_pair }}
+          cache-from: type=gha,scope=pr-${{ matrix.platform_pair }}
+          cache-to: type=gha,mode=max,scope=pr-${{ matrix.platform_pair }}
           build-args: |
             COMMIT_HASH=${{ github.sha }}
             BUILD_DATE=${{ steps.current-time.outputs.time }}
 
       - name: Export Docker meta output
         shell: bash
-        run: echo $DOCKER_METADATA_OUTPUT_JSON > /tmp/metadata.json
+        run: echo "$DOCKER_METADATA_OUTPUT_JSON" > /tmp/metadata.json
 
       - name: Upload metadata
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -89,8 +85,8 @@ jobs:
       - name: Upload image
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: image-${{ env.PLATFORM_PAIR }}
-          path: /tmp/image-${{ env.PLATFORM_PAIR }}.tar
+          name: image-${{ matrix.platform_pair }}
+          path: /tmp/image-${{ matrix.platform_pair }}.tar
           if-no-files-found: error
           retention-days: 1
 
@@ -98,7 +94,7 @@ jobs:
         shell: bash
         env:
           PR_NUMBER: ${{ github.event.number }}
-        run: echo $PR_NUMBER > /tmp/pull_request_number.txt
+        run: echo "$PR_NUMBER" > /tmp/pull_request_number.txt
       - name: Upload PR number
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

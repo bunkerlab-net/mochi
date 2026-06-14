@@ -2,11 +2,11 @@ name: Refresh yt-dlp image
 
 on:
   schedule:
-    - cron: '17 9 * * *'
+    - cron: "17 9 * * *"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to rebuild. Defaults to the latest GitHub release.'
+        description: "Release tag to rebuild. Defaults to the latest GitHub release."
         required: false
         type: string
 
@@ -17,10 +17,12 @@ concurrency:
 env:
   REGISTRY_IMAGE: ghcr.io/bunkerlab-net/mochi
 
+permissions: {}
+
 jobs:
   refresh:
     name: Build image with latest yt-dlp
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: write
@@ -101,16 +103,25 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=yt-dlp-latest
+            type=raw,value=yt-dlp-${{ steps.versions.outputs.yt_dlp_version }}
+            type=raw,value=${{ steps.versions.outputs.app_version }}-yt-dlp
+            type=raw,value=${{ steps.versions.outputs.app_version }}-yt-dlp-${{ steps.versions.outputs.yt_dlp_version }}
+
       - name: Build and push
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.REGISTRY_IMAGE }}:yt-dlp-latest
-            ${{ env.REGISTRY_IMAGE }}:yt-dlp-${{ steps.versions.outputs.yt_dlp_version }}
-            ${{ env.REGISTRY_IMAGE }}:${{ steps.versions.outputs.app_version }}-yt-dlp
-            ${{ env.REGISTRY_IMAGE }}:${{ steps.versions.outputs.app_version }}-yt-dlp-${{ steps.versions.outputs.yt_dlp_version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=yt-dlp
+          cache-to: type=gha,mode=max,scope=yt-dlp
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ steps.build-metadata.outputs.source_sha }}
