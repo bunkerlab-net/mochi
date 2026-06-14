@@ -328,8 +328,9 @@ export default class implements Command {
       "Auto announce next song in queue": config.autoAnnounceNextSong
         ? "yes"
         : "no",
-      "Add to queue reponses show for requester only":
-        config.autoAnnounceNextSong ? "yes" : "no",
+      "Autoplay similar music when queue ends": config.autoplay ? "yes" : "no",
+      "Add to queue responses show for requester only":
+        config.queueAddResponseEphemeral ? "yes" : "no",
       "Default Volume": config.defaultVolume,
       "Default queue page size": config.defaultQueuePageSize,
       "Reduce volume when people speak": config.turnDownVolumeWhenPeopleSpeak

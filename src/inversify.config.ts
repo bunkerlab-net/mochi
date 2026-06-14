@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { Client, GatewayIntentBits } from "discord.js";
 import { Container } from "inversify";
 import Bot from "./bot.js";
+import Autoplay from "./commands/autoplay.js";
 import Clear from "./commands/clear.js";
 import Config from "./commands/config.js";
 import Disconnect from "./commands/disconnect.js";
@@ -30,10 +31,12 @@ import Volume from "./commands/volume.js";
 import PlayerManager from "./managers/player.js";
 // Services
 import AddQueryToQueue from "./services/add-query-to-queue.js";
+import AutoplayService from "./services/autoplay.js";
 import ConfigProvider from "./services/config.js";
 import FileCacheProvider from "./services/file-cache.js";
 import GetSongs from "./services/get-songs.js";
 import KeyValueCacheProvider from "./services/key-value-cache.js";
+import LastfmAPI from "./services/lastfm-api.js";
 import SpotifyAPI from "./services/spotify-api.js";
 import ThirdParty from "./services/third-party.js";
 import YoutubeAPI from "./services/youtube-api.js";
@@ -73,6 +76,10 @@ container
   .bind<YoutubeAPI>(TYPES.Services.YoutubeAPI)
   .to(YoutubeAPI)
   .inSingletonScope();
+container
+  .bind<AutoplayService>(TYPES.Services.Autoplay)
+  .to(AutoplayService)
+  .inSingletonScope();
 
 // Only instanciate spotify dependencies if the Spotify client ID and secret are set
 const config = container.get<ConfigProvider>(TYPES.Config);
@@ -84,8 +91,18 @@ if (config.SPOTIFY_CLIENT_ID !== "" && config.SPOTIFY_CLIENT_SECRET !== "") {
   container.bind(TYPES.ThirdParty).to(ThirdParty);
 }
 
+// Only instanciate Last.fm if an API key is set; autoplay falls back to YouTube
+// mixes when it's absent (LastfmAPI is injected optionally).
+if (config.LASTFM_API_KEY !== "") {
+  container
+    .bind<LastfmAPI>(TYPES.Services.LastfmAPI)
+    .to(LastfmAPI)
+    .inSingletonScope();
+}
+
 // Commands
 [
+  Autoplay,
   Clear,
   Config,
   Disconnect,

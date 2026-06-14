@@ -2,14 +2,19 @@
 experimental = true
 minimum_release_age = "1d"
 npm.package_manager = "bun"
+pipx.uvx = true
 
 [tools]
+"pipx:yt-dlp" = "latest"
+
 bun = "1"
+ffmpeg = "8"
 gh = "2"
 hk = "1.48.0"
 node = "24"
 pkl = "0.31"
 usage = "latest"
+uv = "0.11"
 
 [env]
 PROJECT_ROOT = "{{config_root}}"

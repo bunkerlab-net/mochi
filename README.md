@@ -38,11 +38,12 @@ Mochi runs entirely on [Bun](https://bun.com) — runtime, package manager, and 
 
 ## Requirements
 
-Running Mochi needs a Discord token and a YouTube API key. Spotify keys are optional and enable Spotify URL conversion:
+Running Mochi needs a Discord token and a YouTube API key. Spotify and Last.fm keys are optional — Spotify keys enable Spotify URL conversion, and a Last.fm key improves [autoplay](#autoplay) recommendations:
 
 - `DISCORD_TOKEN` — create a 'New Application' [here](https://discord.com/developers/applications), then add a 'Bot'.
 - `YOUTUBE_API_KEY` — [create a project](https://console.developers.google.com), enable the YouTube Data API, and create an API key under credentials.
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` (optional) — create a Client ID [here](https://developer.spotify.com/dashboard/applications).
+- `LASTFM_API_KEY` (optional) — create an [API account](https://www.last.fm/api/account/create) (you only need the **API key** it issues). Improves autoplay recommendations; without it, autoplay falls back to YouTube mixes.
 
 A 64-bit OS is required.
 
@@ -68,6 +69,7 @@ docker run -it -v "$(pwd)/data":/data \
   -e YOUTUBE_API_KEY='' \
   -e SPOTIFY_CLIENT_ID='' \
   -e SPOTIFY_CLIENT_SECRET='' \
+  -e LASTFM_API_KEY='' \
   ghcr.io/bunkerlab-net/mochi:latest
 ```
 
@@ -89,6 +91,7 @@ services:
       - YOUTUBE_API_KEY=
       - SPOTIFY_CLIENT_ID=
       - SPOTIFY_CLIENT_SECRET=
+      - LASTFM_API_KEY=
 ```
 
 Keep the same `DISCORD_TOKEN`, reuse the same `/data` volume, and point the service at a newer image tag to upgrade in place — Mochi comes back up with the same bot identity and persisted database/cache.
@@ -140,6 +143,17 @@ The `ghcr.io/bunkerlab-net/mochi:yt-dlp-latest` image is rebuilt on a schedule f
 Mochi can skip non-music segments at the start or end of a YouTube music video using [SponsorBlock](https://sponsor.ajay.app/). It's disabled by default; enable it with `ENABLE_SPONSORBLOCK=true`.
 
 Because SponsorBlock is a public service, it may be down or overloaded. When that happens, Mochi pauses SponsorBlock requests for a few minutes. Adjust the pause duration (in minutes) with `SPONSORBLOCK_TIMEOUT`.
+
+### Autoplay
+
+When the queue runs out, Mochi keeps the music going by finding tracks similar to the one that just played (radio mode) instead of falling silent. It's **on by default** — toggle it per-server with the `/autoplay` command, and check the current state with `/config get`.
+
+Mochi sources similar music two ways:
+
+- **Last.fm** (preferred) — when `LASTFM_API_KEY` is set, Mochi uses Last.fm's similar-track recommendations and resolves them to playable YouTube videos. Create a key via a Last.fm [API account](https://www.last.fm/api/account/create); only the issued **API key** is needed.
+- **YouTube mixes** (fallback) — when no Last.fm key is set, or Last.fm returns nothing, Mochi seeds YouTube's auto-generated radio mix for the last track. This needs no extra configuration.
+
+Autoplay seeds from the last track, so it only continues when that track is a YouTube source; live streams and direct HTTP streams can't be seeded.
 
 ### Custom bot status
 
