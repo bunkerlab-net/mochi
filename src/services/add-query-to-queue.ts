@@ -1,5 +1,9 @@
 import shuffle from "array-shuffle";
-import type { ChatInputCommandInteraction, GuildMember } from "discord.js";
+import {
+  type ChatInputCommandInteraction,
+  type GuildMember,
+  MessageFlags,
+} from "discord.js";
 import { inject, injectable } from "inversify";
 import { SponsorBlock } from "sponsorblock-api";
 import type PlayerManager from "../managers/player.js";
@@ -124,7 +128,9 @@ export default class AddQueryToQueue {
     const settings = await getGuildSettings(guildId);
     const { playlistLimit, queueAddResponseEphemeral } = settings;
 
-    await interaction.deferReply({ ephemeral: queueAddResponseEphemeral });
+    await interaction.deferReply(
+      queueAddResponseEphemeral ? { flags: MessageFlags.Ephemeral } : {},
+    );
 
     let [newSongs, extraMsg] = await this.getSongs.getSongs(
       query,

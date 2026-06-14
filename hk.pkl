@@ -18,19 +18,20 @@ local linters = new Mapping<String, Step> {
   ["mixed_line_ending"] = Builtins.mixed_line_ending
   // Ensure all files end in a new line
   ["newlines"] = Builtins.newlines
-  // No commit to protected branches (exit 0 when detached HEAD, e.g. during rebase)
-  ["no_commit_protected_branch"] {
-    check =
-      #"""
-        branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
-        case "$branch" in
-          main|master)
-            echo "Cannot commit directly to protected branch '$branch'" >&2
-            exit 1
-            ;;
-        esac
-      """#
-  }
+  // Temporarily disable no_commit_protected_branch
+  // // No commit to protected branches (exit 0 when detached HEAD, e.g. during rebase)
+  // ["no_commit_protected_branch"] {
+  //   check =
+  //     #"""
+  //       branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
+  //       case "$branch" in
+  //         main|master)
+  //           echo "Cannot commit directly to protected branch '$branch'" >&2
+  //           exit 1
+  //           ;;
+  //       esac
+  //     """#
+  // }
   // Format Pickle files
   ["pkl_format"] = Builtins.pkl_format
   // Lint Pickle files

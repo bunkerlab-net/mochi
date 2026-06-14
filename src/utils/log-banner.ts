@@ -5,11 +5,9 @@ const logBanner = () => {
   const buildDate = process.env["BUILD_DATE"];
   console.log(
     makeLines({
-      user: "codetheweb",
+      user: "bunkerlab-net",
       repository: "mochi",
       version: readPackageSync().version,
-      paypalUser: "codetheweb",
-      githubSponsor: "codetheweb",
       madeByPrefix: "Made with 🎶 by ",
       ...(buildDate ? { buildDate: new Date(buildDate) } : {}),
       commit: process.env["COMMIT_HASH"] ?? "unknown",

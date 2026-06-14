@@ -1,27 +1,36 @@
-diff --git a/deps/config/opus/linux/arm64/config.h b/deps/config/opus/linux/arm64/config.h
-index 78787d29c7282e9e0e70020837bbf62a9587582e..929b045809ce924ec075daf192e15e2d26c42210 100644
---- a/deps/config/opus/linux/arm64/config.h
-+++ b/deps/config/opus/linux/arm64/config.h
-@@ -100,8 +100,11 @@
- /* Define if compiler supports NEON instructions */
- /* #undef OPUS_ARM_MAY_HAVE_NEON */
-
--/* Compiler supports ARMv7 Neon Intrinsics */
--/* #undef OPUS_ARM_MAY_HAVE_NEON_INTR */
-+/* Compiler supports ARMv7/Aarch64 Neon Intrinsics */
-+#define OPUS_ARM_MAY_HAVE_NEON_INTR 1
-+
-+/* Define if binary requires Aarch64 Neon Intrinsics */
-+#define OPUS_ARM_PRESUME_AARCH64_NEON_INTR 1
-
- /* Define if binary requires EDSP instruction support */
- /* #undef OPUS_ARM_PRESUME_EDSP */
-@@ -113,7 +116,7 @@
- /* #undef OPUS_ARM_PRESUME_NEON */
-
- /* Define if binary requires NEON intrinsics support */
--/* #undef OPUS_ARM_PRESUME_NEON_INTR */
-+#define OPUS_ARM_PRESUME_NEON_INTR 1
-
- /* This is a build of OPUS */
- #define OPUS_BUILD /**/
+diff --git a/node_modules/@discordjs/opus/.bun-tag-814526c5ae41c1e5 b/.bun-tag-814526c5ae41c1e5
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@discordjs/opus/.bun-tag-dce5b4cb421bde87 b/.bun-tag-dce5b4cb421bde87
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/deps/binding.gyp b/deps/binding.gyp
+index 510ccb4087fc74b3909ec0a50407dd452e79c630..1d85dbe76310898759e3138fc01922ee374e60a7 100644
+--- a/deps/binding.gyp
++++ b/deps/binding.gyp
+@@ -205,7 +205,24 @@
+             "defines": ["PIC", "HAVE_CONFIG_H"],
+             "conditions": [
+                 [
+-                    "target_arch==\"arm64\"",
++                    "OS==\"linux\" and target_arch==\"arm64\"",
++                    {
++                        # NEON intrinsic sources intentionally omitted on linux/arm64.
++                        # The bundled opus ships an incomplete arm64 NEON source list
++                        # (missing silk/arm/NSQ_neon.c, NSQ_del_dec_neon_intr.c,
++                        # biquad_alt_neon_intr.c), so enabling NEON yields unresolved
++                        # symbols at dlopen (e.g. silk_NSQ_noise_shape_feedback_loop_neon).
++                        # We build the portable C path here; the linux/arm64 config.h
++                        # leaves OPUS_ARM_*_NEON_INTR undefined to match. Other arm64
++                        # targets (e.g. macOS) keep upstream behaviour below.
++                        "sources": [],
++                        "include_dirs": [
++                            "opus",
++                        ],
++                    }
++                ],
++                [
++                    "OS!=\"linux\" and target_arch==\"arm64\"",
+                     {
+                         "sources": [
+                             "opus/celt/arm/arm_celt_map.c",

@@ -4,6 +4,7 @@ import {
   type Client,
   Collection,
   type Interaction,
+  MessageFlags,
   type User,
 } from "discord.js";
 import { Routes } from "discord-api-types/v10";
@@ -70,7 +71,7 @@ export default class {
 
     const spinner = ora("📡 connecting to Discord...").start();
 
-    this.client.once("ready", async () => {
+    this.client.once("clientReady", async () => {
       await this.handleReady(spinner);
     });
 
@@ -98,7 +99,7 @@ export default class {
         } else if (interaction.isCommand() || interaction.isButton()) {
           await interaction.reply({
             content: errorMsg(error as Error),
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
           });
         }
       } catch {}
@@ -129,7 +130,7 @@ export default class {
       ) {
         await interaction.reply({
           content: errorMsg("gotta be in a voice channel"),
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }

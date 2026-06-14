@@ -3,11 +3,13 @@
 </p>
 
 > [!IMPORTANT]
-> Mochi is now community-maintained under the [`bunkerlab-net`](https://github.com/bunkerlab-net) organization. For Docker, use `ghcr.io/bunkerlab-net/mochi` as the canonical image source. Docker Hub tags may be published as compatibility mirrors, but GHCR is the supported target for new deployments.
+> Mochi is a fork of [Muse](https://github.com/museofficial/muse), the self-hosted Discord music bot originally created by Max Isom. It has been rebuilt on the [Bun](https://bun.com) runtime with a modern toolchain (TypeScript 6, Prisma 7, Biome) and is maintained under the [`bunkerlab-net`](https://github.com/bunkerlab-net) organization.
+>
+> Docker images are published to `ghcr.io/bunkerlab-net/mochi`.
 
 ---
 
-Mochi is a **highly-opinionated midwestern self-hosted** Discord music bot **that doesn't suck**. It's made for small to medium-sized Discord servers/guilds (think about a group the size of you, your friends, and your friend's friends).
+Mochi is a self-hosted Discord music bot for small to medium servers — think a group the size of you, your friends, and their friends. It keeps Muse's feature set and rebuilds it on a current, Bun-native stack.
 
 ![Hero graphic](.github/hero.png)
 
@@ -16,53 +18,64 @@ Mochi is a **highly-opinionated midwestern self-hosted** Discord music bot **tha
 - 🎥 Livestreams
 - ⏩ Seeking within a song/video
 - 💾 Local caching for better performance
-- 📋 No vote-to-skip - this is anarchy, not a democracy
+- 📋 No vote-to-skip — playback is controlled directly
 - ↔️ Autoconverts playlists / artists / albums / songs from Spotify
 - ⭐ Users can save favorite queries for reuse
-- 1️⃣ Mochi instance supports multiple guilds
+- 1️⃣ A single instance supports multiple guilds
 - 🔊 Configurable volume controls, including optional ducking when people speak
 - ✍️ Written in TypeScript, easily extendable
-- ❤️ Loyal Packers fan
+
+## Stack
+
+Mochi runs entirely on [Bun](https://bun.com) — runtime, package manager, and bundler.
+
+- **Runtime:** Bun `1.3.14` (Node.js 24+ compatible)
+- **Language:** TypeScript 6 (strict)
+- **Discord:** discord.js 14 + `@discordjs/voice`
+- **Database:** Prisma 7 with the Rust-free client over SQLite (libSQL driver adapter)
+- **Media:** `ffmpeg` + `yt-dlp`
+- **Tooling:** Biome (lint/format), `hk` (git hooks)
+
+## Requirements
+
+Running Mochi needs a Discord token and a YouTube API key. Spotify keys are optional and enable Spotify URL conversion:
+
+- `DISCORD_TOKEN` — create a 'New Application' [here](https://discord.com/developers/applications), then add a 'Bot'.
+- `YOUTUBE_API_KEY` — [create a project](https://console.developers.google.com), enable the YouTube Data API, and create an API key under credentials.
+- `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` (optional) — create a Client ID [here](https://developer.spotify.com/dashboard/applications).
+
+A 64-bit OS is required.
+
+On first run Mochi logs an invite URL — open it in a browser to add Mochi to your server. Mochi DMs the server owner with setup instructions once it's added.
 
 ## Running
 
-Mochi is written in TypeScript. You can either run Mochi with Docker (recommended) or directly with Node.js. Both methods require the Discord and YouTube API keys below. Spotify keys are optional and enable Spotify URL conversion:
-
-- `DISCORD_TOKEN` can be acquired [here](https://discordapp.com/developers/applications) by creating a 'New Application', then going to 'Bot'.
-- `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` can be acquired [here](https://developer.spotify.com/dashboard/applications) with 'Create a Client ID'.
-- `YOUTUBE_API_KEY` can be acquired by [creating a new project](https://console.developers.google.com) in Google's Developer Console, enabling the YouTube API, and creating an API key under credentials.
-
-Mochi will log a URL when run. Open this URL in a browser to invite Mochi to your server. Mochi will DM the server owner after it's added with setup instructions.
-
-A 64-bit OS is required to run Mochi.
-
-### Versioning
-
-The `master` branch acts as the developing / bleeding edge branch and is not guaranteed to be stable.
-
-When running a production instance, I recommend that you use the [latest release](https://github.com/bunkerlab-net/mochi/releases/).
+You can run Mochi with Docker (recommended) or from source with Bun.
 
 ### 🐳 Docker
 
-There are a variety of image tags available:
+Available image tags:
 
-- `:2`: versions >= 2.0.0
-- `:2.1`: versions >= 2.1.0 and < 2.2.0
-- `:2.1.1`: an exact version specifier
-- `:latest`: whatever the latest version is
-- `:yt-dlp-latest`: the latest release rebuilt with the newest available `yt-dlp`
+- `:latest` — the most recent release
+- `:2`, `:2.11`, `:2.11.5` — semver major / minor / exact
+- `:yt-dlp-latest` — the latest release rebuilt with the newest available `yt-dlp`
 
-(Replace empty config strings with correct values.)
+Replace the empty config values below:
 
 ```bash
-docker run -it -v "$(pwd)/data":/data -e DISCORD_TOKEN='' -e SPOTIFY_CLIENT_ID='' -e SPOTIFY_CLIENT_SECRET='' -e YOUTUBE_API_KEY='' ghcr.io/bunkerlab-net/mochi:latest
+docker run -it -v "$(pwd)/data":/data \
+  -e DISCORD_TOKEN='' \
+  -e YOUTUBE_API_KEY='' \
+  -e SPOTIFY_CLIENT_ID='' \
+  -e SPOTIFY_CLIENT_SECRET='' \
+  ghcr.io/bunkerlab-net/mochi:latest
 ```
 
-This starts Mochi and creates a data directory in your current directory.
+This starts Mochi and creates a `data` directory in your current directory for the database and cache.
 
-You can also store your tokens in an environment file and make it available to your container. By default, the container will look for a `/config` environment file. You can customize this path with the `ENV_FILE` environment variable to use with, for example, [docker secrets](https://docs.docker.com/engine/swarm/secrets/).
+You can also store tokens in an environment file and make it available to the container. By default the container reads a `/config` env file; customize the path with the `ENV_FILE` environment variable (handy for [Docker secrets](https://docs.docker.com/engine/swarm/secrets/)).
 
-**Docker Compose**:
+**Docker Compose:**
 
 ```yaml
 services:
@@ -78,86 +91,97 @@ services:
       - SPOTIFY_CLIENT_SECRET=
 ```
 
-If you keep the same `DISCORD_TOKEN`, reuse the same `/data` volume, and point your Compose service at a newer image tag, Mochi will come back up with the same bot identity and persisted database/cache.
+Keep the same `DISCORD_TOKEN`, reuse the same `/data` volume, and point the service at a newer image tag to upgrade in place — Mochi comes back up with the same bot identity and persisted database/cache.
 
-### Node.js
+### From source (Bun)
 
-**Prerequisites**:
+**Prerequisites:**
 
-- [bun](https://bun.com) 1.3.14 or newer (Mochi runs on the bun runtime)
+- [Bun](https://bun.com) `1.3.14` or newer
 - Node.js 24 or newer
-- ffmpeg (4.1 or later)
+- `ffmpeg` (4.1 or later)
 - `yt-dlp` on your `PATH` (or set `YT_DLP_PATH` to its full path)
 
-1. `git clone https://github.com/bunkerlab-net/mochi.git && cd mochi`
-2. Copy `.env.example` to `.env` and populate with values
-3. I recommend checking out a tagged release with `git checkout v[latest release]`
-4. `bun install`
-5. `bun start`
+```bash
+git clone https://github.com/bunkerlab-net/mochi.git
+cd mochi
+cp .env.example .env   # then fill in your tokens
+bun install
+bun start              # runs pending migrations, then starts Mochi
+```
 
-**Note**: if you're on Windows, you may need to manually set the ffmpeg path. See [#345](https://github.com/bunkerlab-net/mochi/issues/345) for details.
+For local development, `bun dev` runs Mochi with file watching and auto-reload.
 
-## ⚙️ Additional configuration (advanced)
+## ⚙️ Configuration (advanced)
+
+All settings below are environment variables (set them in your `.env` file or container environment).
 
 ### Cache
 
-By default, Mochi limits the total cache size to around 2 GB. If you want to change this, set the environment variable `CACHE_LIMIT`. For example, `CACHE_LIMIT=512MB` or `CACHE_LIMIT=10GB`.
+Mochi limits the total cache size to ~2 GB by default. Change it with `CACHE_LIMIT`, e.g. `CACHE_LIMIT=512MB` or `CACHE_LIMIT=10GB`.
 
 ### yt-dlp
 
-Mochi now uses `yt-dlp` to resolve playable YouTube media URLs. In Docker, the image already includes it. For direct Node.js installs, either put `yt-dlp` on your `PATH` or set `YT_DLP_PATH` in your environment file.
+Mochi uses `yt-dlp` to resolve playable YouTube media URLs. The Docker image bundles it. For source installs, put `yt-dlp` on your `PATH` or set `YT_DLP_PATH`.
 
-Mochi logs `YT_DLP_VERSION` on startup. Set `YT_DLP_AUTO_UPDATE=true` to make Mochi try to update the configured `yt-dlp` installation before connecting to Discord. This works best with the Docker image's bundled virtualenv, or when `YT_DLP_PATH` points at a virtualenv or standalone `yt-dlp` executable that Mochi can update.
+Set `YT_DLP_AUTO_UPDATE=true` to have Mochi attempt to update its configured `yt-dlp` before connecting to Discord. This works best with the Docker image's bundled virtualenv, or when `YT_DLP_PATH` points at a virtualenv or standalone `yt-dlp` executable Mochi can update.
 
-The `ghcr.io/bunkerlab-net/mochi:yt-dlp-latest` image is rebuilt on a schedule from the latest Mochi release with the newest `yt-dlp` published to PyPI. Versioned refresh tags are also published as `:<mochi-version>-yt-dlp-<yt-dlp-version>`.
+The `ghcr.io/bunkerlab-net/mochi:yt-dlp-latest` image is rebuilt on a schedule from the latest release with the newest `yt-dlp` from PyPI. Versioned refresh tags are also published as `:<mochi-version>-yt-dlp-<yt-dlp-version>`.
 
 ### SponsorBlock
 
-Mochi can skip non-music segments at the beginning or end of a Youtube music video (Using [SponsorBlock](https://sponsor.ajay.app/)). It is disabled by default. If you want to enable it, set the environment variable `ENABLE_SPONSORBLOCK=true` or uncomment it in your .env.
-Being a community project, the server may be down or overloaded. When it happen, Mochi will skip requests to SponsorBlock for a few minutes. You can change the skip duration by setting the value of `SPONSORBLOCK_TIMEOUT`.
+Mochi can skip non-music segments at the start or end of a YouTube music video using [SponsorBlock](https://sponsor.ajay.app/). It's disabled by default; enable it with `ENABLE_SPONSORBLOCK=true`.
 
-### Custom Bot Status
+Because SponsorBlock is a public service, it may be down or overloaded. When that happens, Mochi pauses SponsorBlock requests for a few minutes. Adjust the pause duration (in minutes) with `SPONSORBLOCK_TIMEOUT`.
 
-In the default state, Mochi has the status "Online" and the text "Listening to Music". You can change the status through environment variables:
+### Custom bot status
 
-- `BOT_STATUS`:
-  - `online` (Online)
-  - `idle` (Away)
-  - `dnd` (Do not Disturb)
+By default Mochi shows "Online" and "Listening to music". Override it with:
 
-- `BOT_ACTIVITY_TYPE`:
-  - `PLAYING` (Playing XYZ)
-  - `LISTENING` (Listening to XYZ)
-  - `WATCHING` (Watching XYZ)
-  - `STREAMING` (Streaming XYZ)
-
+- `BOT_STATUS`: `online`, `idle` (Away), or `dnd` (Do Not Disturb)
+- `BOT_ACTIVITY_TYPE`: `PLAYING`, `LISTENING`, `WATCHING`, or `STREAMING`
 - `BOT_ACTIVITY`: the text that follows the activity type
+- `BOT_ACTIVITY_URL`: required when using `STREAMING` — a regular YouTube or Twitch stream URL
 
-- `BOT_ACTIVITY_URL` If you use `STREAMING` you MUST set this variable, otherwise it will not work! Here you write a regular YouTube or Twitch Stream URL.
+**Examples**
 
-#### Examples
+Watching a movie, Do Not Disturb:
 
-**Mochi is watching a movie and is DND**:
+```
+BOT_STATUS=dnd
+BOT_ACTIVITY_TYPE=WATCHING
+BOT_ACTIVITY=a movie
+```
 
-- `BOT_STATUS=dnd`
-- `BOT_ACTIVITY_TYPE=WATCHING`
-- `BOT_ACTIVITY=a movie`
+Streaming Monstercat:
 
-**Mochi is streaming Monstercat**:
-
-- `BOT_STATUS=online`
-- `BOT_ACTIVITY_TYPE=STREAMING`
-- `BOT_ACTIVITY_URL=https://www.twitch.tv/monstercat`
-- `BOT_ACTIVITY=Monstercat`
+```
+BOT_STATUS=online
+BOT_ACTIVITY_TYPE=STREAMING
+BOT_ACTIVITY_URL=https://www.twitch.tv/monstercat
+BOT_ACTIVITY=Monstercat
+```
 
 ### Bot-wide commands
 
-If you have Mochi running in a lot of guilds (10+) you may want to switch to registering commands bot-wide rather than for each guild. (The downside to this is that command updates can take up to an hour to propagate.) To do this, set the environment variable `REGISTER_COMMANDS_ON_BOT` to `true`.
+If Mochi runs in many guilds (10+), you may want to register commands bot-wide instead of per guild. Set `REGISTER_COMMANDS_ON_BOT=true`. The trade-off: command updates can take up to an hour to propagate.
 
-### Automatically turn down volume when people speak
+### Turn down volume when people speak
 
-You can configure the bot to automatically turn down the volume when people are speaking in the channel using the following commands:
+Configure Mochi to automatically duck the volume while people are speaking:
 
-- `/config set-reduce-vol-when-voice true` - Enable automatic volume reduction
-- `/config set-reduce-vol-when-voice false` - Disable automatic volume reduction
-- `/config set-reduce-vol-when-voice-target <volume>` - Set the target volume percentage when people speak (0-100, default is 70)
+- `/config set-reduce-vol-when-voice true` — enable automatic volume reduction
+- `/config set-reduce-vol-when-voice false` — disable it
+- `/config set-reduce-vol-when-voice-target <volume>` — target volume percentage while people speak (0–100, default 70)
+
+### ffmpeg path
+
+If `ffmpeg` isn't on your `PATH` (common on Windows), set `FFMPEG_PATH` to the full path of the `ffmpeg` executable.
+
+## Versioning
+
+The `master` branch is the bleeding-edge development branch and is not guaranteed to be stable. For production, run a tagged [release](https://github.com/bunkerlab-net/mochi/releases/).
+
+## License
+
+Mochi is released under the [MIT License](LICENSE). As a fork of [Muse](https://github.com/museofficial/muse), it retains the original copyright (© 2020 Max Isom) alongside the fork's.
