@@ -1,6 +1,7 @@
 import { promises as fs, constants as fsConstants } from "node:fs";
 import path from "node:path";
 import { execa } from "execa";
+import logger from "./logger.js";
 
 const YT_DLP_VERSION_TIMEOUT_MS = 15_000;
 const YT_DLP_UPDATE_TIMEOUT_MS = 120_000;
@@ -266,6 +267,9 @@ export const updateYtDlp = async (): Promise<YtDlpUpdateResult> => {
 export const getYouTubeMediaSource = async (
   videoIdOrUrl: string,
 ): Promise<YtDlpMediaSource> => {
+  const watchUrl = toYouTubeWatchUrl(videoIdOrUrl);
+  logger.debug("yt-dlp", `resolving media source for ${watchUrl}`);
+
   try {
     const { stdout } = await execa(
       getExecutable(),
@@ -281,7 +285,7 @@ export const getYouTubeMediaSource = async (
         "proto:https",
         "--extractor-args",
         "youtube:player_client=android_vr,default,-ios",
-        toYouTubeWatchUrl(videoIdOrUrl),
+        watchUrl,
       ],
       {
         timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
@@ -304,6 +308,7 @@ export const getYouTubeMediaSource = async (
     if (isExecaError(error)) {
       const detail =
         error.stderr?.trim() ?? error.shortMessage ?? "Unknown yt-dlp error";
+      logger.warn("yt-dlp", `failed to extract ${watchUrl}: ${detail}`);
       throw new Error(`yt-dlp failed to extract media: ${detail}`);
     }
 

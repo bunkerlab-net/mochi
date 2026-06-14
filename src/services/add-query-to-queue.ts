@@ -17,6 +17,7 @@ import {
 import { ONE_HOUR_IN_SECONDS } from "../utils/constants.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import { getGuild, getGuildId, getMemberUserId } from "../utils/interaction.js";
+import logger from "../utils/logger.js";
 import type Config from "./config.js";
 import type KeyValueCacheProvider from "./key-value-cache.js";
 import type Player from "./player.js";
@@ -163,6 +164,11 @@ export default class AddQueryToQueue {
       );
     });
 
+    logger.info(
+      "queue",
+      `queued ${newSongs.length} song(s) from "${query}"${addToFrontOfQueue ? " (front of queue)" : ""}`,
+    );
+
     const firstSong = newSongs[0];
     if (!firstSong) {
       throw new Error("no songs found");
@@ -249,8 +255,9 @@ export default class AddQueryToQueue {
       return await this.fetchAndApplySegments(song);
     } catch (e) {
       if (!(e instanceof Error)) {
-        console.error(
-          "Unexpected event occurred while fetching skip segments : ",
+        logger.error(
+          "queue",
+          "unexpected error while fetching skip segments:",
           e,
         );
         return song;
@@ -258,7 +265,11 @@ export default class AddQueryToQueue {
 
       if (!e.message.includes("404")) {
         // Don't log 404 response, it just means that there are no segments for given video
-        console.warn(`Could not fetch skip segments for "${song.url}" :`, e);
+        logger.warn(
+          "queue",
+          `could not fetch skip segments for "${song.url}":`,
+          e,
+        );
       }
 
       if (e.message.includes("504")) {

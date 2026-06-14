@@ -2,7 +2,7 @@ import { inject, injectable } from "inversify";
 import pRetry from "p-retry";
 import SpotifyWebApi from "spotify-web-api-node";
 import { TYPES } from "../types.js";
-import debug from "../utils/debug.js";
+import logger from "../utils/logger.js";
 import type Config from "./config.js";
 
 @injectable()
@@ -37,7 +37,7 @@ export default class ThirdParty {
         { retries: 5 },
       );
     } catch (error: unknown) {
-      debug("Spotify token refresh failed: %O", error);
+      logger.warn("spotify", "token refresh failed: %O", error);
       this.scheduleSpotifyTokenRefresh(60_000);
     }
   }

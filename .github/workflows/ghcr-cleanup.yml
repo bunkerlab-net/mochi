@@ -1,0 +1,45 @@
+name: GHCR Cleanup
+
+# Prune ephemeral images older than 14 days:
+#   sha-*                          pre-release per-commit images (prerelease.yml)
+#   pr-*                           per-PR manifests (pr-release.yml)
+#   *-linux-amd64 / *-linux-arm64  per-arch intermediates (pr-release.yml)
+#   untagged                       orphaned layers
+# latest, edge, semver release tags, and yt-dlp* tags are intentionally preserved
+# (they don't match delete-tags, so they are never deletion candidates).
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Dry run: log deletions without removing anything"
+        required: false
+        default: false
+        type: boolean
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Prune old images
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Prune ephemeral and untagged images older than 14 days
+        uses: dataaxiom/ghcr-cleanup-action@f092b48ba3b604b2a83690dc4b2bbb3392e1045f # v1.2.1
+        with:
+          owner: ${{ github.repository_owner }}
+          packages: mochi
+          older-than: 14 days
+          delete-tags: sha-*,pr-*,*-linux-amd64,*-linux-arm64
+          delete-untagged: true
+          validate: true
+          dry-run: ${{ github.event.inputs.dry-run || 'false' }}

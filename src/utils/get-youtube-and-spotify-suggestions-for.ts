@@ -1,7 +1,7 @@
 import type { APIApplicationCommandOptionChoice } from "discord-api-types/v10";
 import type SpotifyWebApi from "spotify-web-api-node";
-import debug from "./debug.js";
 import getYouTubeSuggestionsFor from "./get-youtube-suggestions-for.js";
+import logger from "./logger.js";
 
 export class SpotifySuggestionsUnavailableError extends Error {
   constructor(
@@ -111,7 +111,11 @@ const getYouTubeAndSpotifySuggestionsFor = async (
     const spotifyResult = await spotifySuggestionPromise;
 
     if ("error" in spotifyResult) {
-      debug("Spotify autocomplete suggestions failed: %O", spotifyResult.error);
+      logger.debug(
+        "spotify",
+        "autocomplete suggestions failed: %O",
+        spotifyResult.error,
+      );
       throw new SpotifySuggestionsUnavailableError(
         suggestions,
         spotifyResult.error,
