@@ -1,6 +1,6 @@
 name: GHCR Cleanup
 
-# Prune ephemeral images older than 14 days, keeping the 50 most recent:
+# Prune ephemeral images older than 14 days:
 #   sha-*                          pre-release per-commit images (prerelease.yml)
 #   pr-*                           per-PR manifests (pr-release.yml)
 #   *-linux-amd64 / *-linux-arm64  per-arch intermediates (pr-release.yml)
@@ -41,6 +41,5 @@ jobs:
           older-than: 14 days
           delete-tags: sha-*,pr-*,*-linux-amd64,*-linux-arm64
           delete-untagged: true
-          keep-n-tagged: 50
           validate: true
           dry-run: ${{ github.event.inputs.dry-run || 'false' }}
