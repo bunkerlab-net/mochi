@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - "v*"
+  # Manual fallback: run "Run workflow" from a release tag ref (e.g. v3.0.1) to
+  # (re)publish that release if the tag-push trigger was ever missed.
+  workflow_dispatch:
 
 env:
   REGISTRY_IMAGE: ghcr.io/bunkerlab-net/mochi
