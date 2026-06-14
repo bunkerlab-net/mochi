@@ -27,7 +27,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ github.token }}
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -39,7 +39,7 @@ jobs:
           pattern: image-linux-*
           merge-multiple: true
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: Load image
         shell: bash
@@ -53,7 +53,7 @@ jobs:
           path: /tmp/SHA
           name: sha
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: Read SHA
         id: read-sha
@@ -79,7 +79,7 @@ jobs:
           path: /tmp/metadata
           name: metadata
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: Read the metadata.json file
         id: metadata_reader
@@ -93,7 +93,7 @@ jobs:
           path: /tmp/pull_request_number
           name: pull_request_number
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
 
       - name: Read PR number
         id: read-pr-number
@@ -118,7 +118,7 @@ jobs:
         with:
           header: "pr-release"
           number: ${{ steps.read-pr-number.outputs.pr_number }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           message: |
             #### :package: :robot: A new release has been made for this pull request.
 
