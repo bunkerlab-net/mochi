@@ -825,14 +825,7 @@ export default class {
         return;
       }
 
-      // Auto announce the next song if configured to
-      const settings = await getGuildSettings(this.guildId);
-      const { autoAnnounceNextSong } = settings;
-      if (autoAnnounceNextSong && this.currentChannel) {
-        await this.currentChannel.send({
-          embeds: [buildPlayingMessageEmbed(this)],
-        });
-      }
+      await this.announceNowPlaying();
     }
   }
 
@@ -884,13 +877,7 @@ export default class {
       );
 
       await this.forward(1);
-
-      // Let the channel know playback is continuing automatically.
-      if (this.currentChannel) {
-        await this.currentChannel.send({
-          embeds: [buildPlayingMessageEmbed(this)],
-        });
-      }
+      await this.announceNowPlaying();
 
       return true;
     } catch (error: unknown) {
@@ -898,6 +885,33 @@ export default class {
       logger.warn("player", `autoplay failed: ${reason}`);
       return false;
     }
+  }
+
+  /**
+   * Announce the current track if the guild has `autoAnnounceNextSong` enabled.
+   * Posts to the text channel where the track was requested (`/play`), falling
+   * back to the voice channel's chat if that channel is gone. Shared by normal
+   * queue advances and autoplay so both honor the same setting and channel.
+   */
+  private async announceNowPlaying(): Promise<void> {
+    const settings = await getGuildSettings(this.guildId);
+    if (!settings.autoAnnounceNextSong) {
+      return;
+    }
+
+    const message = { embeds: [buildPlayingMessageEmbed(this)] };
+    const requestedChannelId = this.getCurrent()?.addedInChannelId;
+    const requestedChannel = requestedChannelId
+      ? this.currentChannel?.guild.channels.cache.get(requestedChannelId)
+      : undefined;
+
+    if (requestedChannel?.isTextBased()) {
+      await requestedChannel.send(message);
+      return;
+    }
+
+    // Fall back to the voice channel's chat if the request channel is gone.
+    await this.currentChannel?.send(message);
   }
 
   private async finishQueue(): Promise<void> {
