@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add autoplay: when the queue empties, Mochi finds music similar to the last track and keeps playing instead of going silent. It is enabled by default and can be toggled per-server with the new `/autoplay` command. Similar tracks come from [Last.fm](https://www.last.fm/api) when the optional `LASTFM_API_KEY` is set (resolved to playable YouTube videos), and otherwise from YouTube's auto-generated radio mix, which needs no extra configuration. Autoplay also keeps playing when `/skip` empties the queue, and honors the `autoAnnounceNextSong` setting when announcing new tracks.
+
 ## [3.0.2] - 2026-06-14
 
 - Route all startup and runtime output through the logger: the banner, database-migration progress, the Discord connection/ready messages, and per-command activity now go through pino instead of `console.log`/`ora` spinners, and dotenv's own startup banner is suppressed. Every line is now consistently formatted and parseable under `LOG_FORMAT`.
