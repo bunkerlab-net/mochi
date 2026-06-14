@@ -1,15 +1,16 @@
-import {ChatInputCommandInteraction} from 'discord.js';
-import {SlashCommandBuilder} from '@discordjs/builders';
-import {TYPES} from '../types.js';
-import {inject, injectable} from 'inversify';
-import PlayerManager from '../managers/player.js';
-import Command from './index.js';
+import { SlashCommandBuilder } from "@discordjs/builders";
+import type { ChatInputCommandInteraction } from "discord.js";
+import { inject, injectable } from "inversify";
+import type PlayerManager from "../managers/player.js";
+import { TYPES } from "../types.js";
+import { getGuildId } from "../utils/interaction.js";
+import type Command from "./index.js";
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
-    .setName('disconnect')
-    .setDescription('pause and disconnect Muse');
+    .setName("disconnect")
+    .setDescription("pause and disconnect Mochi");
 
   public requiresVC = true;
 
@@ -20,14 +21,14 @@ export default class implements Command {
   }
 
   public async execute(interaction: ChatInputCommandInteraction) {
-    const player = this.playerManager.get(interaction.guild!.id);
+    const player = this.playerManager.get(getGuildId(interaction));
 
     if (!player.voiceConnection) {
-      throw new Error('not connected');
+      throw new Error("not connected");
     }
 
     player.disconnect();
 
-    await interaction.reply('u betcha, disconnected');
+    await interaction.reply("u betcha, disconnected");
   }
 }

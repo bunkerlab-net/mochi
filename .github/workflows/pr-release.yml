@@ -1,12 +1,12 @@
 name: Release snapshot of PR
-on:
+on: # zizmor: ignore[dangerous-triggers] deliberate build-on-PR (no secrets) -> release-on-workflow_run (with secrets) split; artifact-sourced SHA & PR number are format-validated before use
   workflow_run:
     workflows: ["Build snapshot of PR"]
     types:
       - completed
 
 env:
-  REGISTRY_IMAGE: ghcr.io/museofficial/muse
+  REGISTRY_IMAGE: ghcr.io/bunkerlab-net/mochi
 
 jobs:
   release-and-comment:
@@ -21,17 +21,17 @@ jobs:
       id-token: write
     steps:
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Download images
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: /tmp/images
           pattern: image-linux-*
@@ -46,7 +46,7 @@ jobs:
           docker load -i /tmp/images/image-linux-arm64.tar
 
       - name: Download SHA
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: /tmp/SHA
           name: sha
@@ -55,17 +55,21 @@ jobs:
 
       - name: Read SHA
         shell: bash
-        run: |
+        run: | # zizmor: ignore[github-env] sha is format-validated (hex only) before the GITHUB_ENV write
           sha="$(tr -d '\n' < /tmp/SHA/sha.txt)"
+          if [[ ! "${sha}" =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "Invalid commit SHA in artifact: ${sha}" >&2
+            exit 1
+          fi
           echo "SHA=${sha}" >> "$GITHUB_ENV"
 
       - name: Push images
         run: |
-          docker push ${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-amd64
-          docker push ${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-arm64
+          docker push "${REGISTRY_IMAGE}:${SHA}-linux-amd64"
+          docker push "${REGISTRY_IMAGE}:${SHA}-linux-arm64"
 
       - name: Download Docker metadata
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: /tmp/metadata
           name: metadata
@@ -74,12 +78,12 @@ jobs:
 
       - name: Read the metadata.json file
         id: metadata_reader
-        uses: juliangruber/read-file-action@v1.1.8
+        uses: juliangruber/read-file-action@271ff311a4947af354c6abcd696a306553b9ec18 # v1.1.8
         with:
           path: /tmp/metadata/metadata.json
 
       - name: Download PR number
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: /tmp/pull_request_number
           name: pull_request_number
@@ -88,17 +92,21 @@ jobs:
 
       - name: Read PR number
         shell: bash
-        run: |
+        run: | # zizmor: ignore[github-env] pr_number is format-validated (digits only) before the GITHUB_ENV write
           pr_number="$(tr -d '\n' < /tmp/pull_request_number/pull_request_number.txt)"
+          if [[ ! "${pr_number}" =~ ^[0-9]+$ ]]; then
+            echo "Invalid PR number in artifact: ${pr_number}" >&2
+            exit 1
+          fi
           echo "PR_NUMBER=${pr_number}" >> "$GITHUB_ENV"
 
       - name: Create manifest list and push
         run: |
           tags="$(jq -cr '.tags | map("-t " + .) | join(" ")' /tmp/metadata/metadata.json)"
-          docker buildx imagetools create ${tags} ${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-amd64 ${{ env.REGISTRY_IMAGE }}:${{ env.SHA }}-linux-arm64
+          docker buildx imagetools create ${tags} "${REGISTRY_IMAGE}:${SHA}-linux-amd64" "${REGISTRY_IMAGE}:${SHA}-linux-arm64"
 
       - name: Create comment
-        uses: marocchino/sticky-pull-request-comment@v3.0.4
+        uses: marocchino/sticky-pull-request-comment@0ea0beb66eb9baf113663a64ec522f60e49231c0 # v3.0.4
         with:
           header: "pr-release"
           number: ${{ env.PR_NUMBER }}

@@ -1,16 +1,17 @@
-import {ChatInputCommandInteraction} from 'discord.js';
-import {TYPES} from '../types.js';
-import {inject, injectable} from 'inversify';
-import PlayerManager from '../managers/player.js';
-import Command from './index.js';
-import {SlashCommandBuilder} from '@discordjs/builders';
-import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
+import { SlashCommandBuilder } from "@discordjs/builders";
+import type { ChatInputCommandInteraction } from "discord.js";
+import { inject, injectable } from "inversify";
+import type PlayerManager from "../managers/player.js";
+import { TYPES } from "../types.js";
+import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
+import { getGuildId } from "../utils/interaction.js";
+import type Command from "./index.js";
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
-    .setName('unskip')
-    .setDescription('go back in the queue by one song');
+    .setName("unskip")
+    .setDescription("go back in the queue by one song");
 
   public requiresVC = true;
 
@@ -20,17 +21,19 @@ export default class implements Command {
     this.playerManager = playerManager;
   }
 
-  public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const player = this.playerManager.get(interaction.guild!.id);
+  public async execute(
+    interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
+    const player = this.playerManager.get(getGuildId(interaction));
 
     try {
       await player.back();
       await interaction.reply({
-        content: 'back \'er up\'',
+        content: "back 'er up'",
         embeds: player.getCurrent() ? [buildPlayingMessageEmbed(player)] : [],
       });
     } catch (_: unknown) {
-      throw new Error('no song to go back to');
+      throw new Error("no song to go back to");
     }
   }
 }

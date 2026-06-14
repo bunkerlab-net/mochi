@@ -1,4 +1,4 @@
-import parse from 'parse-duration';
+import parse from "parse-duration";
 
 /**
  * Parse duration strings to seconds.
@@ -6,13 +6,13 @@ import parse from 'parse-duration';
  * @returns seconds
  */
 const durationStringToSeconds = (str: string) => {
-  let seconds;
+  let seconds: number;
   const isInputSeconds = Boolean(/\d+$/.exec(str));
 
   if (isInputSeconds) {
     seconds = Number.parseInt(str, 10);
   } else {
-    seconds = parse(str) / 1000;
+    seconds = (parse(str) ?? 0) / 1000;
   }
 
   return seconds;

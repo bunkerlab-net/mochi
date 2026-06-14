@@ -14,7 +14,7 @@ Concisely describe what's going wrong.
 
 <!-- Paste any logs here (between the backticks). -->
 <!-- You can get extended logs by setting the environment variable DEBUG to *. -->
-<!-- For example, DEBUG=* yarn start if you're running directly from the cloned repository. -->
+<!-- For example, DEBUG=* bun start if you're running directly from the cloned repository. -->
 ```
 
 ```
@@ -26,13 +26,13 @@ If applicable, add screenshots to help explain your problem.
 Add any other context about the problem here.
 
 **Runtime**
-I'm running Muse:
+I'm running Mochi:
 - [ ] Directly from the cloned repository
 - [ ] Inside a Docker container
 - [ ] Something else (please elaborate)
 
 **Versions**
-- Muse:
+- Mochi:
 - Docker (if applicable):
 - OS:
 - Node.js: (if running outside the Docker container)

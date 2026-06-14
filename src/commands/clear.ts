@@ -1,15 +1,16 @@
-import {inject, injectable} from 'inversify';
-import {ChatInputCommandInteraction} from 'discord.js';
-import {SlashCommandBuilder} from '@discordjs/builders';
-import {TYPES} from '../types.js';
-import PlayerManager from '../managers/player.js';
-import Command from './index.js';
+import { SlashCommandBuilder } from "@discordjs/builders";
+import type { ChatInputCommandInteraction } from "discord.js";
+import { inject, injectable } from "inversify";
+import type PlayerManager from "../managers/player.js";
+import { TYPES } from "../types.js";
+import { getGuildId } from "../utils/interaction.js";
+import type Command from "./index.js";
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
-    .setName('clear')
-    .setDescription('clears all songs in queue except currently playing song');
+    .setName("clear")
+    .setDescription("clears all songs in queue except currently playing song");
 
   public requiresVC = true;
 
@@ -20,8 +21,8 @@ export default class implements Command {
   }
 
   public async execute(interaction: ChatInputCommandInteraction) {
-    this.playerManager.get(interaction.guild!.id).clear();
+    this.playerManager.get(getGuildId(interaction)).clear();
 
-    await interaction.reply('clearer than a field after a fresh harvest');
+    await interaction.reply("clearer than a field after a fresh harvest");
   }
 }

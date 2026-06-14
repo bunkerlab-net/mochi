@@ -3,7 +3,8 @@ export const chunk = <T>(arr: T[], len: number) => {
 
   let i = 0;
   while (i < arr.length) {
-    chunks.push(arr.slice(i, i += len));
+    chunks.push(arr.slice(i, i + len));
+    i += len;
   }
 
   return chunks;

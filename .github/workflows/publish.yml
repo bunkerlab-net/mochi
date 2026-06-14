@@ -6,8 +6,8 @@ on:
     - 'v*'
 
 env:
-  REGISTRY_IMAGE: ghcr.io/museofficial/muse
-  DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/muse
+  REGISTRY_IMAGE: ghcr.io/bunkerlab-net/mochi
+  DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/mochi
 
 jobs:
   publish:
@@ -31,16 +31,16 @@ jobs:
       id-token: write
     steps:
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Login to DockerHub
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -53,7 +53,7 @@ jobs:
 
       - name: Build and push
         id: docker_build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           push: true
           tags: |
@@ -74,19 +74,21 @@ jobs:
       attestations: write
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Login to DockerHub
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -151,7 +153,7 @@ jobs:
             "${REGISTRY_IMAGE}:${GITHUB_SHA}-amd64"
 
       - name: Update Docker Hub description
-        uses: peter-evans/dockerhub-description@v5
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
@@ -166,7 +168,9 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Get version from tag
         id: tag_name
@@ -177,8 +181,10 @@ jobs:
       - name: Get Changelog Entry
         id: changelog_reader
         shell: bash
+        env:
+          CURRENT_VERSION: ${{ steps.tag_name.outputs.current_version }}
         run: |
-          version="${{ steps.tag_name.outputs.current_version }}"
+          version="${CURRENT_VERSION}"
           changelog_path="./CHANGELOG.md"
           changes_file="$(mktemp)"
 
@@ -225,7 +231,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create/update release
-        uses: ncipollo/release-action@v1
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0 # zizmor: ignore[superfluous-actions] richer release handling (allowUpdates, changelog body, draft/prerelease) than gh release
         with:
           tag: v${{ steps.changelog_reader.outputs.version }}
           name: Release v${{ steps.changelog_reader.outputs.version }}

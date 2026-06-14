@@ -14,4 +14,3 @@ DROP TABLE "Setting";
 ALTER TABLE "new_Setting" RENAME TO "Setting";
 PRAGMA foreign_key_check;
 PRAGMA foreign_keys=ON;
-

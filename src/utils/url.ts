@@ -1,4 +1,4 @@
-import {URL} from 'url';
+import { URL } from "node:url";
 
 export const cleanUrl = (url: string) => {
   try {
@@ -6,7 +6,7 @@ export const cleanUrl = (url: string) => {
     const u = new URL(url);
 
     for (const [name] of u.searchParams) {
-      if (name !== 'v') {
+      if (name !== "v") {
         u.searchParams.delete(name);
       }
     }

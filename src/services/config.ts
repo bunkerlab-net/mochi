@@ -1,35 +1,48 @@
-import dotenv from 'dotenv';
-import 'reflect-metadata';
-import {injectable} from 'inversify';
-import path from 'path';
-import xbytes from 'xbytes';
-import {ConditionalKeys} from 'type-fest';
-import {ActivityType, PresenceStatusData} from 'discord.js';
-dotenv.config({path: process.env.ENV_FILE ?? path.resolve(process.cwd(), '.env')});
+import dotenv from "dotenv";
+import "reflect-metadata";
+import path from "node:path";
+import { ActivityType, type PresenceStatusData } from "discord.js";
+import { injectable } from "inversify";
+import type { ConditionalKeys } from "type-fest";
+import xbytes from "xbytes";
 
-export const DATA_DIR = path.resolve(process.env.DATA_DIR ? process.env.DATA_DIR : './data');
+dotenv.config({
+  path: process.env["ENV_FILE"] ?? path.resolve(process.cwd(), ".env"),
+});
 
-const firstNonEmpty = (...values: Array<string | undefined>) => values
-  .map(value => value?.trim())
-  .find((value): value is string => Boolean(value));
+export const DATA_DIR = path.resolve(
+  process.env["DATA_DIR"] ? process.env["DATA_DIR"] : "./data",
+);
+
+const firstNonEmpty = (...values: Array<string | undefined>) =>
+  values
+    .map((value) => value?.trim())
+    .find((value): value is string => Boolean(value));
 
 const CONFIG_MAP = {
-  DISCORD_TOKEN: process.env.DISCORD_TOKEN,
-  YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY,
-  SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID ?? '',
-  SPOTIFY_CLIENT_SECRET: process.env.SPOTIFY_CLIENT_SECRET ?? '',
-  REGISTER_COMMANDS_ON_BOT: process.env.REGISTER_COMMANDS_ON_BOT === 'true',
+  DISCORD_TOKEN: process.env["DISCORD_TOKEN"],
+  YOUTUBE_API_KEY: process.env["YOUTUBE_API_KEY"],
+  SPOTIFY_CLIENT_ID: process.env["SPOTIFY_CLIENT_ID"] ?? "",
+  SPOTIFY_CLIENT_SECRET: process.env["SPOTIFY_CLIENT_SECRET"] ?? "",
+  REGISTER_COMMANDS_ON_BOT: process.env["REGISTER_COMMANDS_ON_BOT"] === "true",
   DATA_DIR,
-  CACHE_DIR: path.join(DATA_DIR, 'cache'),
-  CACHE_LIMIT_IN_BYTES: xbytes.parseSize(process.env.CACHE_LIMIT ?? '2GB'),
-  BOT_STATUS: process.env.BOT_STATUS ?? 'online',
-  BOT_ACTIVITY_TYPE: process.env.BOT_ACTIVITY_TYPE ?? 'LISTENING',
-  BOT_ACTIVITY_URL: process.env.BOT_ACTIVITY_URL ?? '',
-  BOT_ACTIVITY: process.env.BOT_ACTIVITY ?? 'music',
-  ENABLE_SPONSORBLOCK: process.env.ENABLE_SPONSORBLOCK === 'true',
-  SPONSORBLOCK_TIMEOUT: parseInt(process.env.SPONSORBLOCK_TIMEOUT ?? '5', 10),
-  YT_DLP_PATH: firstNonEmpty(process.env.YT_DLP_PATH, process.env.MUSE_BUNDLED_YT_DLP_PATH) ?? 'yt-dlp',
-  YT_DLP_AUTO_UPDATE: process.env.YT_DLP_AUTO_UPDATE === 'true',
+  CACHE_DIR: path.join(DATA_DIR, "cache"),
+  CACHE_LIMIT_IN_BYTES: xbytes.parseSize(process.env["CACHE_LIMIT"] ?? "2GB"),
+  BOT_STATUS: process.env["BOT_STATUS"] ?? "online",
+  BOT_ACTIVITY_TYPE: process.env["BOT_ACTIVITY_TYPE"] ?? "LISTENING",
+  BOT_ACTIVITY_URL: process.env["BOT_ACTIVITY_URL"] ?? "",
+  BOT_ACTIVITY: process.env["BOT_ACTIVITY"] ?? "music",
+  ENABLE_SPONSORBLOCK: process.env["ENABLE_SPONSORBLOCK"] === "true",
+  SPONSORBLOCK_TIMEOUT: parseInt(
+    process.env["SPONSORBLOCK_TIMEOUT"] ?? "5",
+    10,
+  ),
+  YT_DLP_PATH:
+    firstNonEmpty(
+      process.env["YT_DLP_PATH"],
+      process.env["MOCHI_BUNDLED_YT_DLP_PATH"],
+    ) ?? "yt-dlp",
+  YT_DLP_AUTO_UPDATE: process.env["YT_DLP_AUTO_UPDATE"] === "true",
 } as const;
 
 const BOT_ACTIVITY_TYPE_MAP = {
@@ -60,26 +73,30 @@ export default class Config {
 
   constructor() {
     for (const [key, value] of Object.entries(CONFIG_MAP)) {
-      if (typeof value === 'undefined') {
+      if (typeof value === "undefined") {
         console.error(`Missing environment variable for ${key}`);
         process.exit(1);
       }
 
-      if (key === 'BOT_ACTIVITY_TYPE') {
-        this[key] = BOT_ACTIVITY_TYPE_MAP[(value as string).toUpperCase() as keyof typeof BOT_ACTIVITY_TYPE_MAP];
+      if (key === "BOT_ACTIVITY_TYPE") {
+        this[key] =
+          BOT_ACTIVITY_TYPE_MAP[
+            (
+              value as string
+            ).toUpperCase() as keyof typeof BOT_ACTIVITY_TYPE_MAP
+          ];
         continue;
       }
 
-      if (typeof value === 'number') {
+      if (typeof value === "number") {
         if (!Number.isFinite(value)) {
           throw new Error(`Invalid numeric value for ${key}`);
         }
 
         this[key as ConditionalKeys<typeof CONFIG_MAP, number>] = value;
-      } else if (typeof value === 'string') {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        (this as any)[key] = value.trim();
-      } else if (typeof value === 'boolean') {
+      } else if (typeof value === "string") {
+        (this as unknown as Record<string, unknown>)[key] = value.trim();
+      } else if (typeof value === "boolean") {
         this[key as ConditionalKeys<typeof CONFIG_MAP, boolean>] = value;
       } else {
         throw new Error(`Unsupported type for ${key}`);

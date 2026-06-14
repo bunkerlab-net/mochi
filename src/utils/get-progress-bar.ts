@@ -1,13 +1,13 @@
 export default (width: number, progress: number): string => {
   const dotPosition = Math.floor(width * progress);
 
-  let res = '';
+  let res = "";
 
   for (let i = 0; i < width; i++) {
     if (i === dotPosition) {
-      res += '🔘';
+      res += "🔘";
     } else {
-      res += '▬';
+      res += "▬";
     }
   }
 

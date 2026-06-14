@@ -1,0 +1,27 @@
+diff --git a/deps/config/opus/linux/arm64/config.h b/deps/config/opus/linux/arm64/config.h
+index 78787d29c7282e9e0e70020837bbf62a9587582e..929b045809ce924ec075daf192e15e2d26c42210 100644
+--- a/deps/config/opus/linux/arm64/config.h
++++ b/deps/config/opus/linux/arm64/config.h
+@@ -100,8 +100,11 @@
+ /* Define if compiler supports NEON instructions */
+ /* #undef OPUS_ARM_MAY_HAVE_NEON */
+
+-/* Compiler supports ARMv7 Neon Intrinsics */
+-/* #undef OPUS_ARM_MAY_HAVE_NEON_INTR */
++/* Compiler supports ARMv7/Aarch64 Neon Intrinsics */
++#define OPUS_ARM_MAY_HAVE_NEON_INTR 1
++
++/* Define if binary requires Aarch64 Neon Intrinsics */
++#define OPUS_ARM_PRESUME_AARCH64_NEON_INTR 1
+
+ /* Define if binary requires EDSP instruction support */
+ /* #undef OPUS_ARM_PRESUME_EDSP */
+@@ -113,7 +116,7 @@
+ /* #undef OPUS_ARM_PRESUME_NEON */
+
+ /* Define if binary requires NEON intrinsics support */
+-/* #undef OPUS_ARM_PRESUME_NEON_INTR */
++#define OPUS_ARM_PRESUME_NEON_INTR 1
+
+ /* This is a build of OPUS */
+ #define OPUS_BUILD /**/

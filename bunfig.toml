@@ -1,0 +1,6 @@
+[install]
+# 1 day in seconds
+minimumReleaseAge = 86400
+# When true, bun install will not update bun.lock. (Default false)
+# If package.json and the existing bun.lock are not in agreement, this will error.
+frozenLockfile = false

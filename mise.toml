@@ -1,0 +1,18 @@
+[settings]
+experimental = true
+minimum_release_age = "1d"
+npm.package_manager = "bun"
+
+[tools]
+bun = "1"
+gh = "2"
+hk = "1.48.0"
+node = "24"
+pkl = "0.31"
+usage = "latest"
+
+[env]
+PROJECT_ROOT = "{{config_root}}"
+
+[hooks]
+enter = ["hk install --mise"]

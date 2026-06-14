@@ -1,16 +1,17 @@
-import {ChatInputCommandInteraction} from 'discord.js';
-import {TYPES} from '../types.js';
-import {inject, injectable} from 'inversify';
-import PlayerManager from '../managers/player.js';
-import Command from './index.js';
-import {SlashCommandBuilder} from '@discordjs/builders';
-import {STATUS} from '../services/player.js';
+import { SlashCommandBuilder } from "@discordjs/builders";
+import type { ChatInputCommandInteraction } from "discord.js";
+import { inject, injectable } from "inversify";
+import type PlayerManager from "../managers/player.js";
+import { STATUS } from "../services/player.js";
+import { TYPES } from "../types.js";
+import { getGuildId } from "../utils/interaction.js";
+import type Command from "./index.js";
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
-    .setName('loop-queue')
-    .setDescription('toggle looping the entire queue');
+    .setName("loop-queue")
+    .setDescription("toggle looping the entire queue");
 
   public requiresVC = true;
 
@@ -20,15 +21,17 @@ export default class implements Command {
     this.playerManager = playerManager;
   }
 
-  public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const player = this.playerManager.get(interaction.guild!.id);
+  public async execute(
+    interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
+    const player = this.playerManager.get(getGuildId(interaction));
 
     if (player.status === STATUS.IDLE) {
-      throw new Error('no songs to loop!');
+      throw new Error("no songs to loop!");
     }
 
     if (player.queueSize() < 2) {
-      throw new Error('not enough songs to loop a queue!');
+      throw new Error("not enough songs to loop a queue!");
     }
 
     if (player.loopCurrentSong) {
@@ -37,6 +40,8 @@ export default class implements Command {
 
     player.loopCurrentQueue = !player.loopCurrentQueue;
 
-    await interaction.reply((player.loopCurrentQueue ? 'looped queue :)' : 'stopped looping queue :('));
+    await interaction.reply(
+      player.loopCurrentQueue ? "looped queue :)" : "stopped looping queue :(",
+    );
   }
 }

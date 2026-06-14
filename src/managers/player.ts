@@ -1,7 +1,7 @@
-import {inject, injectable} from 'inversify';
-import {TYPES} from '../types.js';
-import Player from '../services/player.js';
-import FileCacheProvider from '../services/file-cache.js';
+import { inject, injectable } from "inversify";
+import type FileCacheProvider from "../services/file-cache.js";
+import Player from "../services/player.js";
+import { TYPES } from "../types.js";
 
 @injectable()
 export default class {

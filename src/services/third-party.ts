@@ -1,9 +1,9 @@
-import {inject, injectable} from 'inversify';
-import SpotifyWebApi from 'spotify-web-api-node';
-import pRetry from 'p-retry';
-import {TYPES} from '../types.js';
-import Config from './config.js';
-import debug from '../utils/debug.js';
+import { inject, injectable } from "inversify";
+import pRetry from "p-retry";
+import SpotifyWebApi from "spotify-web-api-node";
+import { TYPES } from "../types.js";
+import debug from "../utils/debug.js";
+import type Config from "./config.js";
 
 @injectable()
 export default class ThirdParty {
@@ -28,13 +28,16 @@ export default class ThirdParty {
 
   private async refreshSpotifyToken() {
     try {
-      await pRetry(async () => {
-        const auth = await this.spotify.clientCredentialsGrant();
-        this.spotify.setAccessToken(auth.body.access_token);
-        this.scheduleSpotifyTokenRefresh((auth.body.expires_in / 2) * 1000);
-      }, {retries: 5});
+      await pRetry(
+        async () => {
+          const auth = await this.spotify.clientCredentialsGrant();
+          this.spotify.setAccessToken(auth.body.access_token);
+          this.scheduleSpotifyTokenRefresh((auth.body.expires_in / 2) * 1000);
+        },
+        { retries: 5 },
+      );
     } catch (error: unknown) {
-      debug('Spotify token refresh failed: %O', error);
+      debug("Spotify token refresh failed: %O", error);
       this.scheduleSpotifyTokenRefresh(60_000);
     }
   }

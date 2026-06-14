@@ -1,0 +1,68 @@
+// https://hk.jdx.dev
+amends "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.48.0/hk@1.48.0#/Builtins.pkl"
+
+local linters = new Mapping<String, Step> {
+  // https://hk.jdx.dev/builtins.html
+  // Lint JS/TS Files
+  ["biome"] = (Builtins.biome) {
+    exclude = List(".vscode/*.json", ".zed/*.json")
+    check = "bun biome check --error-on-warnings --no-errors-on-unmatched {{ files }}"
+    fix = "bun biome check --write --error-on-warnings --no-errors-on-unmatched {{ files }}"
+  }
+  // Detect accidentally committed private keys
+  ["detect_private_key"] = Builtins.detect_private_key
+  // Check Mise files
+  ["mise"] = Builtins.mise
+  // Ensure all files end with LF (*nix) not CRLF (DOS)
+  ["mixed_line_ending"] = Builtins.mixed_line_ending
+  // Ensure all files end in a new line
+  ["newlines"] = Builtins.newlines
+  // No commit to protected branches (exit 0 when detached HEAD, e.g. during rebase)
+  ["no_commit_protected_branch"] {
+    check =
+      #"""
+        branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null) || exit 0
+        case "$branch" in
+          main|master)
+            echo "Cannot commit directly to protected branch '$branch'" >&2
+            exit 1
+            ;;
+        esac
+      """#
+  }
+  // Format Pickle files
+  ["pkl_format"] = Builtins.pkl_format
+  // Lint Pickle files
+  ["pkl_lint"] = Builtins.pkl
+  // Format Shell files
+  // Ensure `package.json` keys are sorted alphabetically
+  ["sort_package_json"] = (Builtins.sort_package_json) {
+    check = "bun sort-package-json --check {{ files }}"
+    fix = "bun sort-package-json {{ files }}"
+  }
+  // No trailing whitespace allowed
+  ["trailing_whitespace"] = Builtins.trailing_whitespace
+}
+
+hooks {
+  ["pre-commit"] {
+    steps = (linters) {
+      // Run every package's test script (coverage thresholds are per-package)
+      ["test"] {
+        check = "bun run --filter '*' test"
+      }
+    }
+    stash = "git"
+  }
+
+  // "fix" and "check" are special steps for `hk fix` and `hk check` commands
+  ["fix"] {
+    fix = true
+    steps = linters
+  }
+
+  ["check"] {
+    steps = linters
+  }
+}

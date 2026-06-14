@@ -1,6 +1,12 @@
-node_modules
-data
-dist
-dts
-.env
-Dockerfile
+# Ignore everything
+**
+
+# Except the following:
+!migrations/
+!patches/
+!src/
+!package.json
+!bun.lock
+!tsconfig.json
+!schema.prisma
+!prisma.config.ts

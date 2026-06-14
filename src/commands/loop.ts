@@ -1,16 +1,17 @@
-import {ChatInputCommandInteraction} from 'discord.js';
-import {TYPES} from '../types.js';
-import {inject, injectable} from 'inversify';
-import PlayerManager from '../managers/player.js';
-import Command from './index.js';
-import {SlashCommandBuilder} from '@discordjs/builders';
-import {STATUS} from '../services/player.js';
+import { SlashCommandBuilder } from "@discordjs/builders";
+import type { ChatInputCommandInteraction } from "discord.js";
+import { inject, injectable } from "inversify";
+import type PlayerManager from "../managers/player.js";
+import { STATUS } from "../services/player.js";
+import { TYPES } from "../types.js";
+import { getGuildId } from "../utils/interaction.js";
+import type Command from "./index.js";
 
 @injectable()
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
-    .setName('loop')
-    .setDescription('toggle looping the current song');
+    .setName("loop")
+    .setDescription("toggle looping the current song");
 
   public requiresVC = true;
 
@@ -20,11 +21,13 @@ export default class implements Command {
     this.playerManager = playerManager;
   }
 
-  public async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-    const player = this.playerManager.get(interaction.guild!.id);
+  public async execute(
+    interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
+    const player = this.playerManager.get(getGuildId(interaction));
 
     if (player.status === STATUS.IDLE) {
-      throw new Error('no song to loop!');
+      throw new Error("no song to loop!");
     }
 
     if (player.loopCurrentQueue) {
@@ -33,6 +36,8 @@ export default class implements Command {
 
     player.loopCurrentSong = !player.loopCurrentSong;
 
-    await interaction.reply((player.loopCurrentSong ? 'looped :)' : 'stopped looping :('));
+    await interaction.reply(
+      player.loopCurrentSong ? "looped :)" : "stopped looping :(",
+    );
   }
 }
