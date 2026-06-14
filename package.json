@@ -11,7 +11,7 @@
     "src"
   ],
   "scripts": {
-    "build": "bun build --target=bun --production --splitting --outdir=dist --external=@discordjs/opus --external=@snazzah/davey --external=ffmpeg-static --external=opusscript --external=node-opus --external=sodium-native --external=sodium --external=tweetnacl --external=bufferutil --external=utf-8-validate src/scripts/migrate-and-start.ts",
+    "build": "bun build --target=bun --production --splitting --outdir=dist --external=@discordjs/opus --external=@snazzah/davey --external=ffmpeg-static --external=bufferutil --external=utf-8-validate src/scripts/migrate-and-start.ts",
     "cache:clear-key-value": "bun run src/scripts/cache-clear-key-value.ts",
     "db:generate": "drizzle-kit generate",
     "dev": "bun --watch src/scripts/start.ts",
