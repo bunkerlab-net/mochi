@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-06-14
+
 - Fix chapter splitting (`/play … split: true`): only the first chapter played because every chapter shared one cache entry keyed by the video URL; cache keys are now segment-aware (URL + offset + length).
 - Fix "The application did not respond" when skipping or resuming into a slow or unplayable track: `/skip`, `/next`, `/unskip`, and `/resume` now defer the interaction before resolving media, and an unplayable track is skipped to the next one instead of surfacing a spurious error (this also makes automatic queue advancement resilient to bad tracks).
 - Fix `/skip` (and `/unskip`/`/seek`) advancing an extra track: deliberately stopping the current stream to start a new one fired the queue's auto-advance handler a second time. The handler is now detached before the switch, so skipping moves exactly as far as requested.
@@ -540,7 +542,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/bunkerlab-net/mochi/compare/v3.0.0...v3.0.1
 [3.0.0]: https://github.com/bunkerlab-net/mochi/compare/v2.11.5...v3.0.0
 [2.11.5]: https://github.com/museofficial/muse/compare/v2.11.4...v2.11.5
 [2.11.4]: https://github.com/museofficial/muse/compare/v2.11.3...v2.11.4
