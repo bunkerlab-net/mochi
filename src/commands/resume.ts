@@ -42,10 +42,14 @@ export default class implements Command {
       throw new Error("nothing to play");
     }
 
+    // Defer before (re)connecting and starting playback, which can take longer
+    // than Discord's 3s interaction ack window.
+    await interaction.deferReply();
+
     await player.connect(targetVoiceChannel);
     await player.play();
 
-    await interaction.reply({
+    await interaction.editReply({
       content: "the stop-and-go light is now green",
       embeds: [buildPlayingMessageEmbed(player)],
     });

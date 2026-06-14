@@ -295,18 +295,21 @@ export default class {
         this.lastSongURL = currentSong.url;
       }
     } catch (error: unknown) {
-      await this.forward(1);
+      debug(
+        `Failed to start ${currentSong.title}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
 
-      if ((error as { statusCode: number }).statusCode === 410 && currentSong) {
-        const channelId = currentSong.addedInChannelId;
-
-        if (channelId) {
-          debug(`${currentSong.title} is unavailable`);
-          return;
-        }
+      // A single unplayable track shouldn't halt the queue or surface to the
+      // caller as a command error. If a later track exists, skip to it and treat
+      // the failure as recovered; otherwise stop and surface the error.
+      if (this.getQueue().length === 0) {
+        await this.finishQueue();
+        throw error;
       }
 
-      throw error;
+      await this.forward(1);
     }
   }
 
@@ -540,6 +543,14 @@ export default class {
     return this.volume ?? this.defaultVolume;
   }
 
+  private getCacheKey(song: QueuedSong): string {
+    // Chapter splits share one video URL but cover different segments. The cache
+    // stores ffmpeg's `-to`-bounded output, so keying only by URL means the first
+    // chapter's truncated audio is reused for every later chapter (which then seek
+    // past its end and play nothing). Include the segment bounds in the key.
+    return `${song.url}:${song.offset}:${song.length}`;
+  }
+
   private getHashForCache(url: string): string {
     return hashSync(url, { algorithm: "sha512" });
   }
@@ -563,7 +574,7 @@ export default class {
 
     return this.createReadStream({
       url: ffmpegInput,
-      cacheKey: song.url,
+      cacheKey: this.getCacheKey(song),
       ffmpegInputOptions,
       cache: shouldCacheVideo,
     });
@@ -581,7 +592,7 @@ export default class {
     let shouldCacheVideo = false;
 
     let ffmpegInput = await this.fileCache.getPathFor(
-      this.getHashForCache(song.url),
+      this.getHashForCache(this.getCacheKey(song)),
     );
 
     if (!ffmpegInput) {

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fix chapter splitting (`/play … split: true`): only the first chapter played because every chapter shared one cache entry keyed by the video URL; cache keys are now segment-aware (URL + offset + length).
+- Fix "The application did not respond" when skipping or resuming into a slow or unplayable track: `/skip`, `/next`, `/unskip`, and `/resume` now defer the interaction before resolving media, and an unplayable track is skipped to the next one instead of surfacing a spurious error (this also makes automatic queue advancement resilient to bad tracks).
+
 ## [3.0.0] - 2026-06-14
 
 - Rebrand from Muse to Mochi and migrate to a Bun-native stack: Bun 1.3.14 (runtime, package manager, and bundler) on Node.js 24 and TypeScript 6, replacing yarn.
