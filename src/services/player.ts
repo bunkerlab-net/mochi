@@ -352,6 +352,9 @@ export default class {
     try {
       if (this.getCurrent() && this.status !== STATUS.PAUSED) {
         await this.play();
+      } else if (this.status !== STATUS.PAUSED && (await this.tryAutoplay())) {
+        // Queue ran out — autoplay refilled it at the current position.
+        await this.play();
       } else {
         await this.finishQueue();
       }
@@ -808,20 +811,11 @@ export default class {
       newState.status === AudioPlayerStatus.Idle &&
       this.status === STATUS.PLAYING
     ) {
-      if (!this.canGoForward(1)) {
-        // Queue ran out — try to keep playing similar music before giving up.
-        if (await this.tryAutoplay()) {
-          return;
-        }
-
-        await this.finishQueue();
-        return;
-      }
-
       logger.debug("player", "track ended, advancing to next");
+      // forward() advances to the next song, refills via autoplay, or finishes
+      // the queue. Announce only when something is actually playing afterwards.
       await this.forward(1);
-      const currentSong = this.getCurrent();
-      if (!currentSong) {
+      if (!this.getCurrent()) {
         return;
       }
 
@@ -845,8 +839,9 @@ export default class {
       return false;
     }
 
-    // The just-finished track is still the "current" song at this point.
-    const seed = this.getCurrent();
+    // forward() advances past the end of the queue before calling us, so the
+    // seed is the track we just left (the last song in the queue).
+    const seed = this.getCurrent() ?? this.queue[this.queuePosition - 1];
     if (!seed) {
       return false;
     }
@@ -871,13 +866,12 @@ export default class {
         });
       }
 
+      // The new tracks land at the current (past-the-end) position, so the
+      // caller can start playback without advancing the queue further.
       logger.info(
         "player",
         `autoplay queued ${related.length} track(s) similar to "${seed.title}"`,
       );
-
-      await this.forward(1);
-      await this.announceNowPlaying();
 
       return true;
     } catch (error: unknown) {
