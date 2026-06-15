@@ -1,0 +1,39 @@
+diff --git a/lib/install.js b/lib/install.js
+index 95964808eba36cc20f46028372fefd76bef19ce6..f4573e2e676006512076dc9d0ab8eda05686b0a9 100644
+--- a/lib/install.js
++++ b/lib/install.js
+@@ -10,7 +10,7 @@ const log = require('npmlog');
+ const existsAsync = fs.exists || path.exists;
+ const versioning = require('./util/versioning.js');
+ const napi = require('./util/napi.js');
+-const makeDir = require('make-dir');
++const { makeDirectory: makeDir } = require('make-dir');
+ // for fetching binaries
+ const fetch = require('node-fetch');
+ const tar = require('tar');
+diff --git a/lib/package.js b/lib/package.js
+index 2a6d3d751850b4c8e0f623a797ebcbfd31184d6b..a0232d1a9995f73cc0c6bfece13ab3a5be8932f4 100644
+--- a/lib/package.js
++++ b/lib/package.js
+@@ -8,7 +8,7 @@ const log = require('npmlog');
+ const versioning = require('./util/versioning.js');
+ const napi = require('./util/napi.js');
+ const existsAsync = fs.exists || path.exists;
+-const makeDir = require('make-dir');
++const { makeDirectory: makeDir } = require('make-dir');
+ const tar = require('tar');
+
+ function readdirSync(dir) {
+diff --git a/lib/testpackage.js b/lib/testpackage.js
+index 16aab6031dd66652de86764fa958276bb070525b..7baf0bb5865e41f17b01c84f31849fd184a4a982 100644
+--- a/lib/testpackage.js
++++ b/lib/testpackage.js
+@@ -10,7 +10,7 @@ const versioning = require('./util/versioning.js');
+ const napi = require('./util/napi.js');
+ const testbinary = require('./testbinary.js');
+ const tar = require('tar');
+-const makeDir = require('make-dir');
++const { makeDirectory: makeDir } = require('make-dir');
+
+ function testpackage(gyp, argv, callback) {
+ 	const { package_json } = gyp;

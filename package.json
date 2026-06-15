@@ -23,7 +23,9 @@
     "typecheck": "tsc --noEmit"
   },
   "overrides": {
-    "@types/ws": "8.18.1"
+    "@types/ws": "8.18.1",
+    "make-dir": "^5.1.0",
+    "type-fest": "^5.7.0"
   },
   "dependencies": {
     "@discordjs/builders": "1.14.1",
@@ -66,7 +68,6 @@
     "@release-it/keep-a-changelog": "^7.1.0",
     "@types/bun": "^1.3.14",
     "@types/fluent-ffmpeg": "^2.1.28",
-    "@types/fs-capacitor": "^8.0.2",
     "@types/node": "^25.9.3",
     "@types/spotify-web-api-node": "^5.0.11",
     "@types/ws": "8.18.1",
@@ -81,6 +82,7 @@
     "node": "^24.x"
   },
   "patchedDependencies": {
-    "@discordjs/opus@0.10.0": "patches/@discordjs%2Fopus@0.10.0.patch"
+    "@discordjs/opus@0.10.0": "patches/@discordjs%2Fopus@0.10.0.patch",
+    "@discordjs/node-pre-gyp@0.4.5": "patches/@discordjs%2Fnode-pre-gyp@0.4.5.patch"
   }
 }
