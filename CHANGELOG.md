@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add SoundCloud support: paste a SoundCloud track, set, or user-profile link into `/play` and Mochi streams the actual SoundCloud audio directly (resolved via `yt-dlp`, the same engine used for YouTube). No extra configuration or API keys are required.
+
 ## [3.1.1] - 2026-06-15
 
 - Fix `/seek` and `/fseek` mis-reading durations that combine a unit with a trailing number (e.g. `1m30`): such input was truncated to the leading number (1 second) instead of being parsed (90 seconds). Only a bare number is now treated as a seconds value; everything else is parsed as a duration.

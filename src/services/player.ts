@@ -24,13 +24,17 @@ import type { Setting } from "../db/schema.js";
 import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import logger from "../utils/logger.js";
-import { getYouTubeMediaSource } from "../utils/yt-dlp.js";
+import {
+  getSoundCloudMediaSource,
+  getYouTubeMediaSource,
+} from "../utils/yt-dlp.js";
 import type Autoplay from "./autoplay.js";
 import type FileCacheProvider from "./file-cache.js";
 
 export enum MediaSource {
   Youtube,
   HLS,
+  SoundCloud,
 }
 
 export interface QueuedPlaylist {
@@ -605,8 +609,9 @@ export default class {
       return this.createReadStream({ url: song.url, cacheKey: song.url });
     }
 
+    // YouTube and SoundCloud both resolve to a streamable URL via yt-dlp.
     const { ffmpegInput, ffmpegInputOptions, shouldCacheVideo } =
-      await this.resolveYouTubeInput(song, options);
+      await this.resolveYtDlpInput(song, options);
 
     return this.createReadStream({
       url: ffmpegInput,
@@ -616,7 +621,7 @@ export default class {
     });
   }
 
-  private async resolveYouTubeInput(
+  private async resolveYtDlpInput(
     song: QueuedSong,
     options: { seek?: number | undefined; to?: number | undefined },
   ): Promise<{
@@ -632,7 +637,10 @@ export default class {
     );
 
     if (!ffmpegInput) {
-      const mediaSource = await getYouTubeMediaSource(song.url);
+      const mediaSource =
+        song.source === MediaSource.SoundCloud
+          ? await getSoundCloudMediaSource(song.url)
+          : await getYouTubeMediaSource(song.url);
       ffmpegInput = mediaSource.url;
 
       // Don't cache livestreams or long videos

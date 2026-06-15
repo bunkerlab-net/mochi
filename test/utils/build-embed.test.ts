@@ -81,6 +81,19 @@ test("buildPlayingMessageEmbed: links HLS sources directly", () => {
   expect(embed.data.description).toContain("https://stream/live.m3u8");
 });
 
+test("buildPlayingMessageEmbed: links SoundCloud sources directly", () => {
+  const embed = buildPlayingMessageEmbed(
+    player({
+      getCurrent: () =>
+        song({
+          source: MediaSource.SoundCloud,
+          url: "https://soundcloud.com/u/track",
+        }),
+    }),
+  );
+  expect(embed.data.description).toContain("https://soundcloud.com/u/track");
+});
+
 test("buildPlayingMessageEmbed: shows 'live' for a livestream", () => {
   const embed = buildPlayingMessageEmbed(
     player({ getCurrent: () => song({ isLive: true }) }),
