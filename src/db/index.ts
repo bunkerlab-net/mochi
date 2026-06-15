@@ -10,7 +10,7 @@ import * as schema from "./schema.js";
 // Honour a `file:`-style DATABASE_URL for local overrides, otherwise the
 // SQLite file lives in the data directory. (Remote libSQL/Turso URLs are not
 // supported; this is a self-hosted, on-disk database.)
-const resolveDatabasePath = (): string => {
+export const resolveDatabasePath = (): string => {
   const url = process.env["DATABASE_URL"];
   if (url?.startsWith("file:")) {
     return url.slice("file:".length);

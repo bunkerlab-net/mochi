@@ -24,7 +24,7 @@ interface Resolved<T> {
  * value falls back to "plain" with a deferred warning rather than throwing, so
  * a typo can never block startup.
  */
-const resolveLogFormat = (): Resolved<LogFormat> => {
+export const resolveLogFormat = (): Resolved<LogFormat> => {
   const raw = process.env["LOG_FORMAT"];
   if (raw === undefined || raw === "") {
     return { value: "plain" };
@@ -46,7 +46,7 @@ const resolveLogFormat = (): Resolved<LogFormat> => {
  * test — and falls back to "info" with a deferred warning on an unknown value,
  * since pino throws on an invalid level at construction.
  */
-const resolveLogLevel = (): Resolved<string> => {
+export const resolveLogLevel = (): Resolved<string> => {
   const raw = process.env["LOG_LEVEL"];
   if (raw === undefined || raw === "") {
     return { value: process.env["NODE_ENV"] === "test" ? "silent" : "info" };
@@ -63,7 +63,7 @@ const resolveLogLevel = (): Resolved<string> => {
   };
 };
 
-const buildRootLogger = (format: LogFormat, level: string): Logger => {
+export const buildRootLogger = (format: LogFormat, level: string): Logger => {
   if (format === "ecs") {
     return pino({ ...ecsFormat(), level });
   }

@@ -5,7 +5,9 @@ export const cleanUrl = (url: string) => {
     // Clean URL
     const u = new URL(url);
 
-    for (const [name] of u.searchParams) {
+    // Snapshot the keys first: deleting from a live URLSearchParams while
+    // iterating it skips the next entry, leaving some params behind.
+    for (const name of [...u.searchParams.keys()]) {
       if (name !== "v") {
         u.searchParams.delete(name);
       }
