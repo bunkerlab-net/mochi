@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fix `/seek` and `/fseek` mis-reading durations that combine a unit with a trailing number (e.g. `1m30`): such input was truncated to the leading number (1 second) instead of being parsed (90 seconds). Only a bare number is now treated as a seconds value; everything else is parsed as a duration.
+
 ## [3.1.0] - 2026-06-14
 
 - Add autoplay: when the queue empties, Mochi finds music similar to the last track and keeps playing instead of going silent. It is enabled by default and can be toggled per-server with the new `/autoplay` command. Similar tracks come from [Last.fm](https://www.last.fm/api) when the optional `LASTFM_API_KEY` is set (resolved to playable YouTube videos), and otherwise from YouTube's auto-generated radio mix, which needs no extra configuration. Autoplay also keeps playing when `/skip` empties the queue, and honors the `autoAnnounceNextSong` setting when announcing new tracks.

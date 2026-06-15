@@ -10,3 +10,12 @@ frozenLockfile = false
 # disabling peer auto-install keeps those drivers out of node_modules and the
 # image. All runtime dependencies are declared explicitly in package.json.
 peer = false
+
+[test]
+coverageThreshold = 0.85
+# Set safe env defaults (and an in-memory database) before any module loads.
+preload = ["./test/setup.ts"]
+# get-guild-settings is a thin DB lookup-or-create that is mocked by ~10 test
+# files (to break the player→inversify import chain); it is therefore never run
+# real and cannot be reliably covered. Exclude it from coverage.
+coveragePathIgnorePatterns = ["src/utils/get-guild-settings.ts"]
