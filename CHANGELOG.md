@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-06-15
+
 - Fix `/seek` and `/fseek` mis-reading durations that combine a unit with a trailing number (e.g. `1m30`): such input was truncated to the leading number (1 second) instead of being parsed (90 seconds). Only a bare number is now treated as a seconds value; everything else is parsed as a duration.
 
 ## [3.1.0] - 2026-06-14
@@ -556,7 +558,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/bunkerlab-net/mochi/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/bunkerlab-net/mochi/compare/v3.0.2...v3.1.0
 [3.0.2]: https://github.com/bunkerlab-net/mochi/compare/v3.0.1...v3.0.2
 [3.0.1]: https://github.com/bunkerlab-net/mochi/compare/v3.0.0...v3.0.1
