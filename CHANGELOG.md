@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-06-15
+
 - Add SoundCloud support: paste a SoundCloud track, set, or user-profile link into `/play` and Mochi streams the actual SoundCloud audio directly (resolved via `yt-dlp`, the same engine used for YouTube). No extra configuration or API keys are required.
 
 ## [3.1.1] - 2026-06-15
@@ -560,7 +562,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.2.0...HEAD
+[3.2.0]: https://github.com/bunkerlab-net/mochi/compare/v3.1.1...v3.2.0
 [3.1.1]: https://github.com/bunkerlab-net/mochi/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/bunkerlab-net/mochi/compare/v3.0.2...v3.1.0
 [3.0.2]: https://github.com/bunkerlab-net/mochi/compare/v3.0.1...v3.0.2
