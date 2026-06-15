@@ -1,4 +1,4 @@
-import { afterAll, expect, mock, test } from "bun:test";
+import { expect, mock, test } from "bun:test";
 import {
   ChannelType,
   type ChatInputCommandInteraction,
@@ -6,26 +6,42 @@ import {
 } from "discord.js";
 import { fakeInteraction, fakeManager } from "../helpers/discord.js";
 
-// Capture the real build-embed before mocking it, then restore it in afterAll.
-// build-embed is a local source module that build-embed.test.ts needs real;
-// bun doesn't reliably reset module mocks between files (notably on Linux), so
-// the stub would otherwise leak and break that file. Mock it here (so we don't
-// need a build-embed-satisfying player) and get-guild-settings (to keep
-// inversify out of the graph).
-const realBuildEmbed = await import("../../src/utils/build-embed.js");
-mock.module("../../src/utils/build-embed.js", () => ({
-  buildPlayingMessageEmbed: () => ({ data: {} }),
-  buildQueueEmbed: () => ({ data: {} }),
-}));
+// build-embed is intentionally NOT mocked: it is a local source module that
+// build-embed.test.ts needs real, and bun leaks module-mock stubs across files
+// on Linux (the stub is captured at file-load time, so an afterAll restore is
+// too late). The now-playing/queue tests pass the build-embed-satisfying
+// `playingPlayer` below. get-guild-settings is mocked to keep inversify out.
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => ({ defaultQueuePageSize: 10 }),
 }));
 
-afterAll(() => {
-  mock.module("../../src/utils/build-embed.js", () => ({ ...realBuildEmbed }));
+const { STATUS, MediaSource } = await import("../../src/services/player.js");
+
+const nowPlayingSong = () => ({
+  title: "A Song",
+  artist: "An Artist",
+  url: "abcdefghijk",
+  length: 200,
+  offset: 0,
+  playlist: null,
+  isLive: false,
+  thumbnailUrl: null,
+  requestedBy: "user-1",
+  source: MediaSource.Youtube,
+  addedInChannelId: "chan-1",
 });
 
-const { STATUS } = await import("../../src/services/player.js");
+const playingPlayer = (overrides: Record<string, unknown> = {}) => ({
+  getCurrent: () => nowPlayingSong(),
+  getQueue: () => [],
+  queueSize: () => 0,
+  getPosition: () => 0,
+  getVolume: () => 100,
+  status: STATUS.PLAYING,
+  loopCurrentSong: false,
+  loopCurrentQueue: false,
+  ...overrides,
+});
 const { default: Skip } = await import("../../src/commands/skip.js");
 const { default: Next } = await import("../../src/commands/next.js");
 const { default: Unskip } = await import("../../src/commands/unskip.js");
@@ -37,7 +53,7 @@ const { default: Resume } = await import("../../src/commands/resume.js");
 
 test("skip: advances and shows the new track", async () => {
   const forward = mock(async () => {});
-  const cmd = new Skip(fakeManager({ forward, getCurrent: () => ({}) }));
+  const cmd = new Skip(fakeManager(playingPlayer({ forward })));
   const { interaction } = fakeInteraction({ integers: { number: 2 } });
   await cmd.execute(interaction);
   expect(forward).toHaveBeenCalledWith(2);
@@ -45,7 +61,7 @@ test("skip: advances and shows the new track", async () => {
 
 test("next: skips to the following track (inherits skip)", async () => {
   const forward = mock(async () => {});
-  const cmd = new Next(fakeManager({ forward, getCurrent: () => ({}) }));
+  const cmd = new Next(fakeManager(playingPlayer({ forward })));
   const { interaction } = fakeInteraction();
   await cmd.execute(interaction);
   expect(forward).toHaveBeenCalledWith(1);
@@ -72,7 +88,7 @@ test("skip: surfaces a friendly error when forwarding fails", async () => {
 
 test("unskip: goes back to the previous track", async () => {
   const back = mock(async () => {});
-  const cmd = new Unskip(fakeManager({ back, getCurrent: () => ({}) }));
+  const cmd = new Unskip(fakeManager(playingPlayer({ back })));
   const { interaction } = fakeInteraction();
   await cmd.execute(interaction);
   expect(back).toHaveBeenCalled();
@@ -91,7 +107,7 @@ test("unskip: surfaces a friendly error when going back fails", async () => {
 });
 
 test("now-playing: replies with the current track", async () => {
-  const cmd = new NowPlaying(fakeManager({ getCurrent: () => ({}) }));
+  const cmd = new NowPlaying(fakeManager(playingPlayer()));
   const { interaction } = fakeInteraction();
   await cmd.execute(interaction);
   expect(true).toBe(true);
@@ -106,14 +122,19 @@ test("now-playing: throws when nothing is playing", async () => {
 });
 
 test("queue: replies with a queue embed using the default page size", async () => {
-  const cmd = new Queue(fakeManager({}));
+  const cmd = new Queue(fakeManager(playingPlayer()));
   const { interaction } = fakeInteraction();
   await cmd.execute(interaction);
   expect(true).toBe(true);
 });
 
 test("queue: honors an explicit page size", async () => {
-  const cmd = new Queue(fakeManager({}));
+  const upcoming = Array.from({ length: 12 }, () => nowPlayingSong());
+  const cmd = new Queue(
+    fakeManager(
+      playingPlayer({ getQueue: () => upcoming, queueSize: () => 12 }),
+    ),
+  );
   const { interaction } = fakeInteraction({
     integers: { page: 2, "page-size": 5 },
   });
@@ -143,12 +164,7 @@ test("resume: connects and resumes playback", async () => {
   const connect = mock(async () => {});
   const play = mock(async () => {});
   const cmd = new Resume(
-    fakeManager({
-      status: STATUS.PAUSED,
-      getCurrent: () => ({}),
-      connect,
-      play,
-    }),
+    fakeManager(playingPlayer({ status: STATUS.PAUSED, connect, play })),
   );
   const { interaction, replies } = resumeInteraction();
   await cmd.execute(interaction);

@@ -1,28 +1,20 @@
-import { afterAll, beforeEach, expect, mock, test } from "bun:test";
+import { beforeEach, expect, mock, test } from "bun:test";
 import {
   ChannelType,
   type ChatInputCommandInteraction,
   Collection,
 } from "discord.js";
 
-// add-query imports build-embed + get-guild-settings (→ player → DI). Mock both.
-// build-embed is captured first and restored in afterAll: it is a local source
-// module that build-embed.test.ts needs real, and bun doesn't reliably reset
-// module mocks between files (notably on Linux), so the stub would otherwise
-// leak and break that file.
+// add-query imports get-guild-settings (→ player → DI); mock it to keep
+// inversify out of the graph. build-embed is intentionally NOT mocked: it is a
+// local source module that build-embed.test.ts needs real, and bun leaks
+// module-mock stubs across files on Linux (the stub is captured at file-load
+// time, so an afterAll restore is too late). The fake player below satisfies
+// the real build-embed.
 let settings: Record<string, unknown> = {};
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => settings,
 }));
-const realBuildEmbed = await import("../../src/utils/build-embed.js");
-mock.module("../../src/utils/build-embed.js", () => ({
-  buildPlayingMessageEmbed: () => ({ data: {} }),
-  buildQueueEmbed: () => ({ data: {} }),
-}));
-
-afterAll(() => {
-  mock.module("../../src/utils/build-embed.js", () => ({ ...realBuildEmbed }));
-});
 
 const { default: AddQueryToQueue } = await import(
   "../../src/services/add-query-to-queue.js"
@@ -43,7 +35,15 @@ const song = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const fakePlayer = (overrides: Record<string, unknown> = {}) => ({
-  getCurrent: () => null,
+  // A full current song so the real buildPlayingMessageEmbed (called from
+  // connectAndPlay) has something to render.
+  getCurrent: () => song(),
+  getQueue: () => [],
+  queueSize: () => 0,
+  getPosition: () => 0,
+  getVolume: () => 100,
+  loopCurrentSong: false,
+  loopCurrentQueue: false,
   voiceConnection: null,
   status: STATUS.PLAYING,
   connect: mock(async () => {}),
