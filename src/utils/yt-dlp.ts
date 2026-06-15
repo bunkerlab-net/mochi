@@ -36,6 +36,32 @@ export interface YtDlpMixEntry {
   readonly duration: number;
 }
 
+export interface YtDlpSoundCloudTrack {
+  readonly url: string;
+  readonly title: string;
+  readonly uploader: string;
+  readonly duration: number;
+  readonly thumbnail: string | null;
+}
+
+export interface YtDlpSoundCloudResult {
+  readonly tracks: YtDlpSoundCloudTrack[];
+  readonly playlist: { title: string; url: string } | null;
+}
+
+interface YtDlpSoundCloudEntry {
+  readonly url?: string;
+  readonly webpage_url?: string;
+  readonly title?: string;
+  readonly uploader?: string;
+  readonly duration?: number;
+  readonly thumbnail?: string;
+}
+
+interface YtDlpSoundCloudResponse extends YtDlpSoundCloudEntry {
+  readonly entries?: readonly YtDlpSoundCloudEntry[];
+}
+
 interface YtDlpFlatEntry {
   readonly id?: string;
   readonly title?: string;
@@ -284,11 +310,11 @@ export const updateYtDlp = async (): Promise<YtDlpUpdateResult> => {
   };
 };
 
-export const getYouTubeMediaSource = async (
-  videoIdOrUrl: string,
+const extractMediaSource = async (
+  url: string,
+  extraArgs: string[],
 ): Promise<YtDlpMediaSource> => {
-  const watchUrl = toYouTubeWatchUrl(videoIdOrUrl);
-  logger.debug("yt-dlp", `resolving media source for ${watchUrl}`);
+  logger.debug("yt-dlp", `resolving media source for ${url}`);
 
   try {
     const { stdout } = await execa(
@@ -303,9 +329,8 @@ export const getYouTubeMediaSource = async (
         "bestaudio/best",
         "-S",
         "proto:https",
-        "--extractor-args",
-        "youtube:player_client=android_vr,default,-ios",
-        watchUrl,
+        ...extraArgs,
+        url,
       ],
       {
         timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
@@ -328,7 +353,7 @@ export const getYouTubeMediaSource = async (
     if (isExecaError(error)) {
       const detail =
         error.stderr?.trim() ?? error.shortMessage ?? "Unknown yt-dlp error";
-      logger.warn("yt-dlp", `failed to extract ${watchUrl}: ${detail}`);
+      logger.warn("yt-dlp", `failed to extract ${url}: ${detail}`);
       throw new Error(`yt-dlp failed to extract media: ${detail}`);
     }
 
@@ -339,6 +364,18 @@ export const getYouTubeMediaSource = async (
     throw error;
   }
 };
+
+export const getYouTubeMediaSource = async (
+  videoIdOrUrl: string,
+): Promise<YtDlpMediaSource> =>
+  extractMediaSource(toYouTubeWatchUrl(videoIdOrUrl), [
+    "--extractor-args",
+    "youtube:player_client=android_vr,default,-ios",
+  ]);
+
+export const getSoundCloudMediaSource = async (
+  url: string,
+): Promise<YtDlpMediaSource> => extractMediaSource(url, []);
 
 /**
  * Fetch the related tracks from a video's auto-generated YouTube "radio" mix.
@@ -400,5 +437,81 @@ export const getYouTubeMixEntries = async (
       `failed to fetch related mix for ${videoId}: ${getExecaErrorMessage(error)}`,
     );
     return [];
+  }
+};
+
+const toSoundCloudTrack = (
+  entry: YtDlpSoundCloudEntry,
+): YtDlpSoundCloudTrack | null => {
+  const url = entry.webpage_url ?? entry.url;
+  if (!url) {
+    return null;
+  }
+
+  return {
+    url,
+    title: entry.title ?? url,
+    uploader: entry.uploader ?? "",
+    duration: typeof entry.duration === "number" ? entry.duration : 0,
+    thumbnail: typeof entry.thumbnail === "string" ? entry.thumbnail : null,
+  };
+};
+
+/**
+ * Resolve a SoundCloud URL into queueable track metadata via yt-dlp.
+ *
+ * A single `--dump-single-json` call transparently handles every SoundCloud link
+ * type: a track URL yields one object, while a set or user profile yields a
+ * `playlist` object with `entries`. A flat-playlist dump lists set/profile entries
+ * (url, title, uploader, duration) without resolving each stream — fast enough to
+ * build queue metadata, with playback resolved lazily by getSoundCloudMediaSource.
+ * Degrades to an empty result on any failure so callers report "no songs found"
+ * rather than falling back to an unrelated YouTube search of the raw URL.
+ */
+export const getSoundCloudSongs = async (
+  url: string,
+  limit: number,
+): Promise<YtDlpSoundCloudResult> => {
+  logger.debug("yt-dlp", `resolving SoundCloud songs for ${url}`);
+
+  try {
+    const { stdout } = await execa(
+      getExecutable(),
+      [
+        "--dump-single-json",
+        "--flat-playlist",
+        "--no-warnings",
+        "--no-cache-dir",
+        "--playlist-end",
+        limit.toString(),
+        url,
+      ],
+      {
+        timeout: YT_DLP_EXTRACT_TIMEOUT_MS,
+      },
+    );
+
+    const response = JSON.parse(stdout) as YtDlpSoundCloudResponse;
+
+    if (response.entries) {
+      const tracks = response.entries
+        .map(toSoundCloudTrack)
+        .filter((track): track is YtDlpSoundCloudTrack => track !== null);
+
+      const playlistUrl = response.webpage_url ?? url;
+      return {
+        tracks,
+        playlist: { title: response.title ?? playlistUrl, url: playlistUrl },
+      };
+    }
+
+    const track = toSoundCloudTrack(response);
+    return { tracks: track ? [track] : [], playlist: null };
+  } catch (error: unknown) {
+    logger.warn(
+      "yt-dlp",
+      `failed to resolve SoundCloud songs for ${url}: ${getExecaErrorMessage(error)}`,
+    );
+    return { tracks: [], playlist: null };
   }
 };

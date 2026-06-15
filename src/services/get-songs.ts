@@ -3,6 +3,7 @@ import ffmpeg from "fluent-ffmpeg";
 import { inject, injectable, optional } from "inversify";
 import * as spotifyURI from "spotify-uri";
 import { TYPES } from "../types.js";
+import { getSoundCloudSongs } from "../utils/yt-dlp.js";
 import {
   MediaSource,
   type QueuedPlaylist,
@@ -70,6 +71,13 @@ export default class {
       "www.music.youtube.com",
     ];
 
+    const SOUNDCLOUD_HOSTS = [
+      "soundcloud.com",
+      "www.soundcloud.com",
+      "m.soundcloud.com",
+      "on.soundcloud.com",
+    ];
+
     if (YOUTUBE_HOSTS.includes(url.host)) {
       // YouTube source
       const listId = url.searchParams.get("list");
@@ -99,6 +107,8 @@ export default class {
       );
       extraMsg = msg;
       newSongs.push(...convertedSongs);
+    } else if (SOUNDCLOUD_HOSTS.includes(url.host)) {
+      newSongs.push(...(await this.soundcloudSource(url.href, playlistLimit)));
     } else {
       const song = await this.httpLiveStream(query);
 
@@ -226,6 +236,29 @@ export default class {
         });
       });
     });
+  }
+
+  private async soundcloudSource(
+    url: string,
+    playlistLimit: number,
+  ): Promise<SongMetadata[]> {
+    const { tracks, playlist } = await getSoundCloudSongs(url, playlistLimit);
+
+    const queuedPlaylist: QueuedPlaylist | null = playlist
+      ? { title: playlist.title, source: playlist.url }
+      : null;
+
+    return tracks.map((track) => ({
+      title: track.title,
+      artist: track.uploader,
+      url: track.url,
+      length: track.duration,
+      offset: 0,
+      playlist: queuedPlaylist,
+      isLive: false,
+      thumbnailUrl: track.thumbnail,
+      source: MediaSource.SoundCloud,
+    }));
   }
 
   private async spotifyToYouTube(

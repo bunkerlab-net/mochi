@@ -156,6 +156,130 @@ test("getYouTubeMediaSource: rethrows unexpected non-execa errors", async () => 
   expect(ytdlp.getYouTubeMediaSource("abcdefghijk")).rejects.toThrow("weird");
 });
 
+test("getSoundCloudMediaSource: resolves a playable url", async () => {
+  execaHandler = async () => ({
+    stdout: JSON.stringify({
+      url: "https://cf-media.sndcdn.com/audio",
+      http_headers: { "User-Agent": "ua" },
+    }),
+  });
+
+  const result = await ytdlp.getSoundCloudMediaSource(
+    "https://soundcloud.com/u/track",
+  );
+  expect(result.url).toBe("https://cf-media.sndcdn.com/audio");
+  expect(result.headers).toEqual({ "User-Agent": "ua" });
+  expect(result.isLive).toBe(false);
+});
+
+test("getSoundCloudMediaSource: surfaces an execa stderr error", async () => {
+  execaHandler = async () => {
+    throw execaError({ stderr: "Track not found" });
+  };
+  expect(
+    ytdlp.getSoundCloudMediaSource("https://soundcloud.com/u/track"),
+  ).rejects.toThrow("yt-dlp failed to extract media: Track not found");
+});
+
+test("getSoundCloudSongs: resolves a single track", async () => {
+  execaHandler = async () => ({
+    stdout: JSON.stringify({
+      webpage_url: "https://soundcloud.com/u/track",
+      title: "Track",
+      uploader: "User",
+      duration: 180,
+      thumbnail: "https://i1.sndcdn.com/x.jpg",
+    }),
+  });
+
+  const result = await ytdlp.getSoundCloudSongs(
+    "https://soundcloud.com/u/track",
+    50,
+  );
+  expect(result.playlist).toBeNull();
+  expect(result.tracks).toEqual([
+    {
+      url: "https://soundcloud.com/u/track",
+      title: "Track",
+      uploader: "User",
+      duration: 180,
+      thumbnail: "https://i1.sndcdn.com/x.jpg",
+    },
+  ]);
+});
+
+test("getSoundCloudSongs: resolves a set with its entries and playlist", async () => {
+  execaHandler = async () => ({
+    stdout: JSON.stringify({
+      title: "My Set",
+      webpage_url: "https://soundcloud.com/u/sets/my-set",
+      entries: [
+        {
+          url: "https://soundcloud.com/u/a",
+          title: "A",
+          uploader: "U",
+          duration: 100,
+          thumbnail: "ta",
+        },
+        { webpage_url: "https://soundcloud.com/u/b" },
+        { title: "no url" },
+      ],
+    }),
+  });
+
+  const result = await ytdlp.getSoundCloudSongs(
+    "https://soundcloud.com/u/sets/my-set",
+    50,
+  );
+  expect(result.playlist).toEqual({
+    title: "My Set",
+    url: "https://soundcloud.com/u/sets/my-set",
+  });
+  expect(result.tracks).toEqual([
+    {
+      url: "https://soundcloud.com/u/a",
+      title: "A",
+      uploader: "U",
+      duration: 100,
+      thumbnail: "ta",
+    },
+    {
+      url: "https://soundcloud.com/u/b",
+      title: "https://soundcloud.com/u/b",
+      uploader: "",
+      duration: 0,
+      thumbnail: null,
+    },
+  ]);
+});
+
+test("getSoundCloudSongs: falls back to the request url for an untitled set", async () => {
+  execaHandler = async () => ({
+    stdout: JSON.stringify({
+      entries: [{ url: "https://soundcloud.com/u/a" }],
+    }),
+  });
+
+  const result = await ytdlp.getSoundCloudSongs(
+    "https://soundcloud.com/u/likes",
+    50,
+  );
+  expect(result.playlist).toEqual({
+    title: "https://soundcloud.com/u/likes",
+    url: "https://soundcloud.com/u/likes",
+  });
+  expect(result.tracks).toHaveLength(1);
+});
+
+test("getSoundCloudSongs: degrades to an empty result on failure", async () => {
+  execaHandler = async () => {
+    throw execaError({ stderr: "boom" });
+  };
+  expect(
+    await ytdlp.getSoundCloudSongs("https://soundcloud.com/u/track", 50),
+  ).toEqual({ tracks: [], playlist: null });
+});
+
 test("getYouTubeMixEntries: filters, dedupes, and defaults entries", async () => {
   execaHandler = async () => ({
     stdout: JSON.stringify({

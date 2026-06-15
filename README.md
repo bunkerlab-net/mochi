@@ -20,6 +20,7 @@ Mochi is a self-hosted Discord music bot for small to medium servers — think a
 - 💾 Local caching for better performance
 - 📋 No vote-to-skip — playback is controlled directly
 - ↔️ Autoconverts playlists / artists / albums / songs from Spotify
+- 🟠 Plays SoundCloud tracks, sets, and user profiles directly — no API key needed
 - ⭐ Users can save favorite queries for reuse
 - 1️⃣ A single instance supports multiple guilds
 - 🔊 Configurable volume controls, including optional ducking when people speak
@@ -132,7 +133,7 @@ Mochi limits the total cache size to ~2 GB by default. Change it with `CACHE_LIM
 
 ### yt-dlp
 
-Mochi uses `yt-dlp` to resolve playable YouTube media URLs. The Docker image bundles it. For source installs, put `yt-dlp` on your `PATH` or set `YT_DLP_PATH`.
+Mochi uses `yt-dlp` to resolve playable YouTube and SoundCloud media URLs. The Docker image bundles it. For source installs, put `yt-dlp` on your `PATH` or set `YT_DLP_PATH`.
 
 Set `YT_DLP_AUTO_UPDATE=true` to have Mochi attempt to update its configured `yt-dlp` before connecting to Discord. This works best with the Docker image's bundled virtualenv, or when `YT_DLP_PATH` points at a virtualenv or standalone `yt-dlp` executable Mochi can update.
 

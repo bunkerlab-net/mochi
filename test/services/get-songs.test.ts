@@ -16,6 +16,23 @@ mock.module("fluent-ffmpeg", () => ({
   }),
 }));
 
+// SoundCloud resolution shells out to yt-dlp via getSoundCloudSongs. Stub it so
+// dispatch is tested without spawning a process.
+type SoundCloudResult = {
+  tracks: Array<{
+    url: string;
+    title: string;
+    uploader: string;
+    duration: number;
+    thumbnail: string | null;
+  }>;
+  playlist: { title: string; url: string } | null;
+};
+let soundcloudResult: SoundCloudResult = { tracks: [], playlist: null };
+mock.module("../../src/utils/yt-dlp.js", () => ({
+  getSoundCloudSongs: async () => soundcloudResult,
+}));
+
 const { default: GetSongs } = await import("../../src/services/get-songs.js");
 const { MediaSource } = await import("../../src/services/player.js");
 
@@ -36,6 +53,7 @@ const makeGetSongs = (youtube: unknown, spotify?: unknown) =>
 
 beforeEach(() => {
   ffprobeError = null;
+  soundcloudResult = { tracks: [], playlist: null };
 });
 
 test("resolves a YouTube video url", async () => {
@@ -168,4 +186,70 @@ test("falls back to YouTube search when a stream cannot be probed", async () => 
     false,
   );
   expect(songs[0]?.url).toBe("fallback");
+});
+
+test("resolves a SoundCloud track", async () => {
+  soundcloudResult = {
+    tracks: [
+      {
+        url: "https://soundcloud.com/u/track",
+        title: "T",
+        uploader: "U",
+        duration: 120,
+        thumbnail: null,
+      },
+    ],
+    playlist: null,
+  };
+  const [songs] = await makeGetSongs({ search: async () => [] }).getSongs(
+    "https://soundcloud.com/u/track",
+    50,
+    false,
+  );
+  expect(songs[0]?.source).toBe(MediaSource.SoundCloud);
+  expect(songs[0]?.url).toBe("https://soundcloud.com/u/track");
+  expect(songs[0]?.artist).toBe("U");
+  expect(songs[0]?.playlist).toBeNull();
+});
+
+test("resolves a SoundCloud set and attaches its playlist", async () => {
+  soundcloudResult = {
+    tracks: [
+      {
+        url: "https://soundcloud.com/u/a",
+        title: "A",
+        uploader: "U",
+        duration: 100,
+        thumbnail: "ta",
+      },
+      {
+        url: "https://soundcloud.com/u/b",
+        title: "B",
+        uploader: "U",
+        duration: 200,
+        thumbnail: null,
+      },
+    ],
+    playlist: { title: "My Set", url: "https://soundcloud.com/u/sets/my-set" },
+  };
+  const [songs] = await makeGetSongs({ search: async () => [] }).getSongs(
+    "https://soundcloud.com/u/sets/my-set",
+    50,
+    false,
+  );
+  expect(songs).toHaveLength(2);
+  expect(songs[0]?.playlist).toEqual({
+    title: "My Set",
+    source: "https://soundcloud.com/u/sets/my-set",
+  });
+});
+
+test("returns no songs for an unresolvable SoundCloud url", async () => {
+  soundcloudResult = { tracks: [], playlist: null };
+  const [songs] = await makeGetSongs({ search: async () => [] }).getSongs(
+    "https://soundcloud.com/u/private",
+    50,
+    false,
+  );
+  expect(songs).toHaveLength(0);
 });

@@ -22,6 +22,7 @@ mock.module("../../src/utils/get-guild-settings.js", () => ({
 }));
 mock.module("../../src/utils/yt-dlp.js", () => ({
   getYouTubeMediaSource: async () => mediaSource,
+  getSoundCloudMediaSource: async () => mediaSource,
 }));
 
 const fakeReadable = () => ({ on: () => {}, pipe: () => {} });
@@ -414,7 +415,20 @@ test("getStream: HLS sources skip youtube resolution", async () => {
   expect(player.status).toBe(STATUS.PLAYING);
 });
 
-test("resolveYouTubeInput: uses a cached file when present", async () => {
+test("getStream: SoundCloud sources resolve via yt-dlp", async () => {
+  const player = makePlayer();
+  player.add(
+    song({
+      source: MediaSource.SoundCloud,
+      url: "https://soundcloud.com/u/track",
+    }),
+  );
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  expect(player.status).toBe(STATUS.PLAYING);
+});
+
+test("resolveYtDlpInput: uses a cached file when present", async () => {
   const player = makePlayer();
   const original = fileCache.getPathFor;
   fileCache.getPathFor = async () => "/cache/file";
