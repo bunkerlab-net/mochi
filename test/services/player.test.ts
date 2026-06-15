@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 
 // ---------------------------------------------------------------------------
-// Mock player.ts's heavy dependencies. get-guild-settings and build-embed are
-// mocked primarily to keep the DI container (inversify.config) and discord.js
-// EmbedBuilder out of the test graph; the voice/ffmpeg/fs-capacitor mocks let
-// the streaming methods run without real audio infrastructure.
+// Mock player.ts's heavy dependencies. get-guild-settings is mocked to keep the
+// DI container (inversify.config) out of the test graph; the voice/ffmpeg/
+// fs-capacitor mocks let the streaming methods run without real audio
+// infrastructure. build-embed is intentionally NOT mocked here: it is a local
+// source module that build-embed.test.ts needs real, and mocking it leaks the
+// stub across files on platforms where bun doesn't reset module mocks. The song
+// fixtures below satisfy the real build-embed.
 // ---------------------------------------------------------------------------
 let settings: Record<string, unknown> = {};
 let mediaSource = {
@@ -16,9 +19,6 @@ let entersStateImpl: () => Promise<void> = async () => {};
 
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => settings,
-}));
-mock.module("../../src/utils/build-embed.js", () => ({
-  buildPlayingMessageEmbed: () => ({ embed: true }),
 }));
 mock.module("../../src/utils/yt-dlp.js", () => ({
   getYouTubeMediaSource: async () => mediaSource,

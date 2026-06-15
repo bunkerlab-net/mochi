@@ -1,4 +1,4 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 import {
   ChannelType,
   type ChatInputCommandInteraction,
@@ -6,14 +6,23 @@ import {
 } from "discord.js";
 
 // add-query imports build-embed + get-guild-settings (→ player → DI). Mock both.
+// build-embed is captured first and restored in afterAll: it is a local source
+// module that build-embed.test.ts needs real, and bun doesn't reliably reset
+// module mocks between files (notably on Linux), so the stub would otherwise
+// leak and break that file.
 let settings: Record<string, unknown> = {};
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => settings,
 }));
+const realBuildEmbed = await import("../../src/utils/build-embed.js");
 mock.module("../../src/utils/build-embed.js", () => ({
   buildPlayingMessageEmbed: () => ({ data: {} }),
   buildQueueEmbed: () => ({ data: {} }),
 }));
+
+afterAll(() => {
+  mock.module("../../src/utils/build-embed.js", () => ({ ...realBuildEmbed }));
+});
 
 const { default: AddQueryToQueue } = await import(
   "../../src/services/add-query-to-queue.js"

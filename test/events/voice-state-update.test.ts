@@ -1,6 +1,14 @@
-import { beforeAll, expect, test } from "bun:test";
+import { beforeAll, expect, mock, test } from "bun:test";
 import { VoiceConnectionStatus } from "@discordjs/voice";
 import { Collection } from "discord.js";
+
+// The handler reads leaveIfNoListeners from get-guild-settings. Pin it to a
+// fixed value so the disconnect logic is deterministic regardless of any leaked
+// get-guild-settings stub from another file (bun doesn't reliably reset module
+// mocks between files, notably on Linux).
+mock.module("../../src/utils/get-guild-settings.js", () => ({
+  getGuildSettings: async () => ({ leaveIfNoListeners: true }),
+}));
 
 // inversify.config first to avoid the bot.ts <-> inversify.config TDZ.
 const { default: container } = await import("../../src/inversify.config.js");

@@ -1,4 +1,4 @@
-import { expect, mock, test } from "bun:test";
+import { afterAll, expect, mock, test } from "bun:test";
 import {
   ChannelType,
   type ChatInputCommandInteraction,
@@ -6,8 +6,13 @@ import {
 } from "discord.js";
 import { fakeInteraction, fakeManager } from "../helpers/discord.js";
 
-// Mock build-embed (so we don't need a build-embed-satisfying player) and
-// get-guild-settings (to keep inversify out of the graph).
+// Capture the real build-embed before mocking it, then restore it in afterAll.
+// build-embed is a local source module that build-embed.test.ts needs real;
+// bun doesn't reliably reset module mocks between files (notably on Linux), so
+// the stub would otherwise leak and break that file. Mock it here (so we don't
+// need a build-embed-satisfying player) and get-guild-settings (to keep
+// inversify out of the graph).
+const realBuildEmbed = await import("../../src/utils/build-embed.js");
 mock.module("../../src/utils/build-embed.js", () => ({
   buildPlayingMessageEmbed: () => ({ data: {} }),
   buildQueueEmbed: () => ({ data: {} }),
@@ -15,6 +20,10 @@ mock.module("../../src/utils/build-embed.js", () => ({
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => ({ defaultQueuePageSize: 10 }),
 }));
+
+afterAll(() => {
+  mock.module("../../src/utils/build-embed.js", () => ({ ...realBuildEmbed }));
+});
 
 const { STATUS } = await import("../../src/services/player.js");
 const { default: Skip } = await import("../../src/commands/skip.js");
