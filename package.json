@@ -1,6 +1,6 @@
 {
   "name": "mochi",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "private": true,
   "description": "🎧 a self-hosted Discord music bot that doesn't suck",
   "repository": "https://github.com/bunkerlab-net/mochi.git",
