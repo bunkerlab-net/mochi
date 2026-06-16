@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Improve autoplay variety: instead of preferring Last.fm and only falling back to YouTube's radio mix, Mochi now gathers related tracks from both sources together (when `LASTFM_API_KEY` is set), de-duplicates across them, and shuffles the combined results before queuing. This blends the two recommendation styles and keeps refills varied; tracks already in the queue are still never repeated.
+
 ## [3.2.0] - 2026-06-15
 
 - Add SoundCloud support: paste a SoundCloud track, set, or user-profile link into `/play` and Mochi streams the actual SoundCloud audio directly (resolved via `yt-dlp`, the same engine used for YouTube). No extra configuration or API keys are required.
