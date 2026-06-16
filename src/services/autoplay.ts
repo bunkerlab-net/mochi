@@ -1,3 +1,4 @@
+import shuffle from "array-shuffle";
 import { inject, injectable, optional } from "inversify";
 import { TYPES } from "../types.js";
 import logger from "../utils/logger.js";
@@ -22,35 +23,47 @@ export default class Autoplay {
   /**
    * Find songs similar to `seed` to keep playback going when the queue empties.
    *
-   * Last.fm is the default source when configured; otherwise — and as a fallback
-   * when Last.fm returns nothing — YouTube's auto-generated radio mix is used.
-   * `exclude` holds URLs already in the queue so we don't repeat recent tracks.
-   * Returns up to `limit` songs, or an empty list if nothing suitable is found.
+   * Both sources are queried in parallel and merged: Last.fm (when configured)
+   * for scrobble-based similarity and YouTube's auto-generated radio mix. Either
+   * can fill the whole batch alone, so an empty or ineligible source degrades to
+   * the other. `exclude` holds URLs already in the queue so we don't repeat
+   * recent tracks; the merged pool is deduped across sources, shuffled to vary
+   * playback order, then trimmed to `limit`. Returns up to `limit` songs, or an
+   * empty list if nothing suitable is found.
    */
   async getRelatedSongs(
     seed: QueuedSong,
     { limit, exclude }: { limit: number; exclude: ReadonlySet<string> },
   ): Promise<SongMetadata[]> {
-    if (this.lastfmAPI) {
-      const fromLastfm = await this.fromLastfm(seed, limit, exclude);
-      if (fromLastfm.length > 0) {
-        logger.debug(
-          "autoplay",
-          `seeded ${fromLastfm.length} track(s) via Last.fm`,
-        );
-        return fromLastfm;
+    // fromLastfm self-guards when Last.fm is unconfigured, so query both blindly.
+    const [fromLastfm, fromMix] = await Promise.all([
+      this.fromLastfm(seed, limit, exclude),
+      this.fromYouTubeMix(seed, limit, exclude),
+    ]);
+
+    // Both paths key on the bare 11-char YouTube id in `.url`, so one set dedupes
+    // across sources (each list is already internally deduped).
+    const seen = new Set<string>();
+    const merged: SongMetadata[] = [];
+    for (const song of [...fromLastfm, ...fromMix]) {
+      if (seen.has(song.url)) {
+        continue;
       }
+
+      seen.add(song.url);
+      merged.push(song);
     }
 
-    const fromMix = await this.fromYouTubeMix(seed, limit, exclude);
-    if (fromMix.length > 0) {
+    // Shuffle so playback isn't always Last.fm-first, then trim to the batch.
+    const songs = shuffle(merged).slice(0, limit);
+    if (songs.length > 0) {
       logger.debug(
         "autoplay",
-        `seeded ${fromMix.length} track(s) via YouTube mix`,
+        `seeded ${songs.length} track(s) (${fromLastfm.length} Last.fm + ${fromMix.length} mix)`,
       );
     }
 
-    return fromMix;
+    return songs;
   }
 
   private async fromLastfm(

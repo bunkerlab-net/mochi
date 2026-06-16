@@ -11,6 +11,14 @@ let mixEntries: Array<Record<string, unknown>> = [];
 mock.module("../../src/utils/yt-dlp.js", () => ({
   getYouTubeMixEntries: async () => mixEntries,
   getYouTubeMediaSource: async () => ({ url: "x", headers: {}, isLive: false }),
+  getSoundCloudMediaSource: async () => ({
+    url: "x",
+    headers: {},
+    isLive: false,
+  }),
+}));
+mock.module("array-shuffle", () => ({
+  default: <T>(items: readonly T[]): T[] => [...items],
 }));
 
 const { default: Autoplay } = await import("../../src/services/autoplay.js");
@@ -64,7 +72,7 @@ test("uses the YouTube mix when Last.fm is not configured", async () => {
   expect(result[0]?.url).toBe("AAAAAAAAAAA");
 });
 
-test("prefers Last.fm and resolves results to YouTube videos", async () => {
+test("resolves Last.fm similar tracks to YouTube videos", async () => {
   const youtube = { search: async (q: string) => [ytSong(`yt:${q}`)] };
   const lastfm = {
     getSimilar: async () => [
@@ -80,7 +88,7 @@ test("prefers Last.fm and resolves results to YouTube videos", async () => {
   expect(result).toHaveLength(2);
 });
 
-test("falls back to the YouTube mix when Last.fm returns nothing", async () => {
+test("uses the YouTube mix when Last.fm returns nothing", async () => {
   mixEntries = [
     { id: "BBBBBBBBBBB", title: "Mix B", uploader: "Up", duration: 90 },
   ];
@@ -160,4 +168,31 @@ test("cleans the seed title and artist before querying Last.fm", async () => {
   );
   expect(received?.artist).toBe("Cool Band");
   expect(received?.title).toBe("My Song");
+});
+
+test("combines Last.fm and YouTube mix results, deduped across sources", async () => {
+  mixEntries = [
+    { id: "MIXAAAAAAAA", title: "M", uploader: "u", duration: 1 },
+    { id: "SHARED00001", title: "S", uploader: "u", duration: 1 },
+  ];
+  const youtube = {
+    search: async (q: string) =>
+      q.includes("S1") ? [ytSong("LASTFMAAAA1")] : [ytSong("SHARED00001")],
+  };
+  const lastfm = {
+    getSimilar: async () => [
+      { name: "S1", artist: "A1" },
+      { name: "S2", artist: "A2" },
+    ],
+  };
+  const result = await makeAutoplay(youtube, lastfm).getRelatedSongs(seed(), {
+    limit: 5,
+    exclude: new Set(),
+  });
+  // LASTFMAAAA1 (Last.fm only), SHARED00001 (in both -> deduped), MIXAAAAAAAA (mix only).
+  expect(result.map((s) => s.url).sort()).toEqual([
+    "LASTFMAAAA1",
+    "MIXAAAAAAAA",
+    "SHARED00001",
+  ]);
 });
