@@ -20,10 +20,15 @@ import type { Snowflake, VoiceChannel } from "discord.js";
 import ffmpeg from "fluent-ffmpeg";
 import { WriteStream } from "fs-capacitor";
 import { hashSync } from "hasha";
-import type { Setting } from "../db/schema.js";
+import type { PlayerState, Setting } from "../db/schema.js";
 import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import logger from "../utils/logger.js";
+import {
+  clearPlayerState,
+  type PlayerStateSnapshot,
+  savePlayerState,
+} from "../utils/player-state.js";
 import {
   getSoundCloudMediaSource,
   getYouTubeMediaSource,
@@ -97,6 +102,7 @@ export default class {
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
   private hasRegisteredVoiceActivityListener = false;
+  private persistenceFrozen = false;
 
   constructor(
     fileCache: FileCacheProvider,
@@ -132,6 +138,30 @@ export default class {
 
     const guildSettings = await getGuildSettings(this.guildId);
     const stateTransitions = [voiceConnection.state.status];
+    this.registerVoiceConnectionListeners(
+      voiceConnection,
+      guildSettings,
+      stateTransitions,
+    );
+
+    try {
+      await this.waitForVoiceConnectionReady(voiceConnection);
+    } catch {
+      const { status } = voiceConnection.state;
+      voiceConnection.destroy();
+      this.voiceConnection = null;
+      throw new Error(
+        `Failed to connect to the voice channel (last state: ${status}, rejoin attempts: ${voiceConnection.rejoinAttempts}, recent states: ${stateTransitions.join(" -> ")}).`,
+      );
+    }
+    this.save();
+  }
+
+  private registerVoiceConnectionListeners(
+    voiceConnection: VoiceConnection,
+    guildSettings: Setting,
+    stateTransitions: VoiceConnectionStatus[],
+  ): void {
     voiceConnection.on("stateChange", (oldState, newState) => {
       stateTransitions.push(newState.status);
       if (stateTransitions.length > 10) {
@@ -155,17 +185,18 @@ export default class {
       VoiceConnectionStatus.Disconnected,
       this.onVoiceConnectionDisconnect.bind(this),
     );
+  }
 
-    try {
-      await this.waitForVoiceConnectionReady(voiceConnection);
-    } catch {
-      const { status } = voiceConnection.state;
-      voiceConnection.destroy();
-      this.voiceConnection = null;
-      throw new Error(
-        `Failed to connect to the voice channel (last state: ${status}, rejoin attempts: ${voiceConnection.rejoinAttempts}, recent states: ${stateTransitions.join(" -> ")}).`,
-      );
-    }
+  // Map a position within the logical track to ffmpeg seek/to bounds, honoring a
+  // chapter `offset`. Shared by fresh starts (position 0) and seeks.
+  private trackBounds(
+    song: QueuedSong,
+    position: number,
+  ): { seek: number; to: number } {
+    return {
+      seek: song.offset + position,
+      to: song.offset + song.length,
+    };
   }
 
   disconnect(): void {
@@ -202,17 +233,8 @@ export default class {
       throw new Error("Seek position is outside the range of the song.");
     }
 
-    let realPositionSeconds = positionSeconds;
-    let to: number | undefined;
-    if (currentSong.offset !== undefined) {
-      realPositionSeconds += currentSong.offset;
-      to = currentSong.length + currentSong.offset;
-    }
-
-    const stream = await this.getStream(currentSong, {
-      seek: realPositionSeconds,
-      to,
-    });
+    const { seek, to } = this.trackBounds(currentSong, positionSeconds);
+    const stream = await this.getStream(currentSong, { seek, to });
     this.audioPlayer = createAudioPlayer({
       behaviors: {
         // Needs to be somewhat high for livestreams
@@ -225,6 +247,7 @@ export default class {
     this.startTrackingPosition(positionSeconds);
 
     this.status = STATUS.PLAYING;
+    this.save();
   }
 
   async forwardSeek(positionSeconds: number): Promise<void> {
@@ -259,6 +282,7 @@ export default class {
         this.audioPlayer.unpause();
         this.status = STATUS.PLAYING;
         this.startTrackingPosition();
+        this.save();
         return;
       }
 
@@ -276,17 +300,8 @@ export default class {
     currentSong: QueuedSong,
   ): Promise<void> {
     try {
-      let positionSeconds: number | undefined;
-      let to: number | undefined;
-      if (currentSong.offset !== undefined) {
-        positionSeconds = currentSong.offset;
-        to = currentSong.length + currentSong.offset;
-      }
-
-      const stream = await this.getStream(currentSong, {
-        seek: positionSeconds,
-        to,
-      });
+      const { seek, to } = this.trackBounds(currentSong, 0);
+      const stream = await this.getStream(currentSong, { seek, to });
       this.audioPlayer = createAudioPlayer({
         behaviors: {
           // Needs to be somewhat high for livestreams
@@ -313,6 +328,7 @@ export default class {
         this.startTrackingPosition(0);
         this.lastSongURL = currentSong.url;
       }
+      this.save();
     } catch (error: unknown) {
       const reason = error instanceof Error ? error.message : String(error);
 
@@ -348,6 +364,7 @@ export default class {
     }
 
     this.stopTrackingPosition();
+    this.save();
   }
 
   async forward(skip: number): Promise<void> {
@@ -450,6 +467,7 @@ export default class {
         "player",
         `queue position ${from} -> ${this.queuePosition} (forward ${skip})`,
       );
+      this.save();
     } else {
       throw new Error("No songs in queue to forward to.");
     }
@@ -469,6 +487,7 @@ export default class {
         "player",
         `queue position ${from} -> ${this.queuePosition} (back)`,
       );
+      this.save();
 
       if (this.status !== STATUS.PAUSED) {
         await this.play();
@@ -503,6 +522,7 @@ export default class {
         ...this.queue.slice(insertAt),
       ];
     }
+    this.save();
   }
 
   shuffle(): void {
@@ -512,6 +532,7 @@ export default class {
       ...this.queue.slice(0, this.queuePosition + 1),
       ...shuffledSongs,
     ];
+    this.save();
   }
 
   clear(): void {
@@ -526,10 +547,12 @@ export default class {
 
     this.queuePosition = 0;
     this.queue = newQueue;
+    this.save();
   }
 
   removeFromQueue(index: number, amount = 1): void {
     this.queue.splice(this.queuePosition + index, amount);
+    this.save();
   }
 
   removeCurrent(): void {
@@ -537,6 +560,7 @@ export default class {
       ...this.queue.slice(0, this.queuePosition),
       ...this.queue.slice(this.queuePosition + 1),
     ];
+    this.save();
   }
 
   queueSize(): number {
@@ -551,6 +575,7 @@ export default class {
     this.disconnect();
     this.queuePosition = 0;
     this.queue = [];
+    this.forget();
   }
 
   move(from: number, to: number): QueuedSong {
@@ -565,6 +590,7 @@ export default class {
 
     this.queue.splice(this.queuePosition + to, 0, song);
 
+    this.save();
     return song;
   }
 
@@ -572,6 +598,7 @@ export default class {
     // Level should be a number between 0 and 100 = 0% => 100%
     this.volume = level;
     this.setAudioPlayerVolume(level);
+    this.save();
   }
 
   getVolume(): number {
@@ -694,6 +721,11 @@ export default class {
 
     this.playPositionInterval = setInterval(() => {
       this.positionInSeconds++;
+      // Persist position periodically so a crash mid-track resumes close to
+      // where it left off (a graceful shutdown flushes the exact position).
+      if (this.positionInSeconds % 15 === 0) {
+        this.save();
+      }
     }, 1000);
   }
 
@@ -920,6 +952,7 @@ export default class {
     logger.info("player", "reached end of queue");
     this.status = STATUS.IDLE;
     this.audioPlayer?.stop(true);
+    this.save();
 
     const settings = await getGuildSettings(this.guildId);
 
@@ -930,6 +963,7 @@ export default class {
         // when disconnecting
         if (this.status === STATUS.IDLE) {
           this.disconnect();
+          this.forget();
         }
       }, secondsToWaitAfterQueueEmpties * 1000);
     }
@@ -1012,5 +1046,80 @@ export default class {
   private setAudioPlayerVolume(level?: number) {
     // Audio resource expects a float between 0 and 1 to represent level percentage
     this.audioResource?.volume?.setVolume((level ?? this.getVolume()) / 100);
+  }
+
+  serialize(): PlayerStateSnapshot {
+    return {
+      guildId: this.guildId,
+      voiceChannelId: this.currentChannel?.id ?? null,
+      queue: this.queue,
+      queuePosition: this.queuePosition,
+      positionInSeconds: this.positionInSeconds,
+      status: this.status,
+      loopCurrentSong: this.loopCurrentSong,
+      loopCurrentQueue: this.loopCurrentQueue,
+      volume: this.volume ?? null,
+    };
+  }
+
+  // Restore queue and position from a persisted snapshot. The current song is
+  // primed as PAUSED so a later play()/seek() resumes at the saved position via
+  // the reconnect path; the caller decides whether to auto-resume playback.
+  restoreState(state: PlayerState): void {
+    this.queue = state.queue;
+    this.queuePosition = state.queuePosition;
+    this.positionInSeconds = state.positionInSeconds;
+    this.loopCurrentSong = state.loopCurrentSong;
+    this.loopCurrentQueue = state.loopCurrentQueue;
+    if (state.volume !== null) {
+      this.volume = state.volume;
+    }
+
+    const current = this.getCurrent();
+    if (current && state.status !== STATUS.IDLE) {
+      this.nowPlaying = current;
+      this.lastSongURL = current.url;
+      this.status = STATUS.PAUSED;
+    } else {
+      this.status = STATUS.IDLE;
+    }
+  }
+
+  // Persist the current snapshot. No-op once frozen for shutdown.
+  private save(): void {
+    if (this.persistenceFrozen) {
+      return;
+    }
+
+    savePlayerState(this.serialize());
+  }
+
+  // Snapshot the live state (current status + exact position) and then freeze
+  // persistence, so the shutdown teardown (disconnect -> pause) cannot overwrite
+  // it. Called for every player right before disconnecting on shutdown.
+  freezeAndSave(): void {
+    if (this.persistenceFrozen) {
+      return;
+    }
+
+    if (this.voiceConnection || this.queue.length > 0) {
+      savePlayerState(this.serialize());
+    }
+
+    this.persistenceFrozen = true;
+  }
+
+  // Drop the persisted snapshot on an intentional stop/disconnect, so the bot
+  // does not rejoin or resume after the user told it to leave.
+  forget(): void {
+    clearPlayerState(this.guildId);
+  }
+
+  // Leave the voice channel but keep the queue, persisting it without a channel
+  // so a later /play resumes it and a restart restores the queue without
+  // rejoining. Used by /disconnect and the empty-channel auto-leave.
+  leave(): void {
+    this.disconnect();
+    this.save();
   }
 }

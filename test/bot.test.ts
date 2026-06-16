@@ -14,6 +14,12 @@ mock.module("@discordjs/rest", () => ({
   },
 }));
 
+// handleReady calls restorePlayers (DB + voice). Stub it so the ready-path tests
+// do not depend on persisted state.
+mock.module("../src/utils/restore-players.js", () => ({
+  default: async () => {},
+}));
+
 // Import inversify.config before bot.js to mirror the app's load order; bot.js
 // and inversify.config.js are circular, so importing bot first hits a TDZ.
 await import("../src/inversify.config.js");

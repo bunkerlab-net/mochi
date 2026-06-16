@@ -33,3 +33,10 @@ test("disconnectAll: runs without error across all players", () => {
   manager.get("guild-2");
   expect(() => manager.disconnectAll()).not.toThrow();
 });
+
+test("saveAndFreezeAll: runs without error across all players", () => {
+  const manager = make();
+  manager.get("guild-1");
+  manager.get("guild-2");
+  expect(() => manager.saveAndFreezeAll()).not.toThrow();
+});

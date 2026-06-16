@@ -37,6 +37,6 @@ export default async (
     !voiceChannel ||
     (getSizeWithoutBots(voiceChannel) === 0 && leaveIfNoListeners)
   ) {
-    player.disconnect();
+    player.leave();
   }
 };

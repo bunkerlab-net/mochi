@@ -10,6 +10,7 @@ import Favorites from "./commands/favorites.js";
 import ForwardSeek from "./commands/fseek.js";
 // Commands
 import type Command from "./commands/index.js";
+import Join from "./commands/join.js";
 import Loop from "./commands/loop.js";
 import LoopQueue from "./commands/loop-queue.js";
 import Move from "./commands/move.js";
@@ -25,6 +26,7 @@ import Seek from "./commands/seek.js";
 import Shuffle from "./commands/shuffle.js";
 import Skip from "./commands/skip.js";
 import Stop from "./commands/stop.js";
+import Summon from "./commands/summon.js";
 import Unskip from "./commands/unskip.js";
 import Volume from "./commands/volume.js";
 // Managers
@@ -108,6 +110,7 @@ if (config.LASTFM_API_KEY !== "") {
   Disconnect,
   Favorites,
   ForwardSeek,
+  Join,
   LoopQueue,
   Loop,
   Move,
@@ -123,6 +126,7 @@ if (config.LASTFM_API_KEY !== "") {
   Shuffle,
   Skip,
   Stop,
+  Summon,
   Unskip,
   Volume,
 ].forEach((command) => {

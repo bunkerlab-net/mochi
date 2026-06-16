@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, expect, mock, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, expect, mock, test } from "bun:test";
+import { runMigrations } from "../../src/db/index.js";
+import { loadPlayerState } from "../../src/utils/player-state.js";
 
 // ---------------------------------------------------------------------------
 // Mock player.ts's heavy dependencies. get-guild-settings is mocked to keep the
@@ -126,10 +128,10 @@ type AnyPlayer = InstanceType<typeof Player> & Record<string, unknown>;
 
 let active: AnyPlayer | undefined;
 
-const makePlayer = () => {
+const makePlayer = (guildId = "guild-1") => {
   const player = new Player(
     fileCache as never,
-    "guild-1",
+    guildId,
     autoplay as never,
   ) as AnyPlayer;
   active = player;
@@ -149,6 +151,10 @@ const song = (overrides: Record<string, unknown> = {}) => ({
   addedInChannelId: "chan-1",
   requestedBy: "user-1",
   ...overrides,
+});
+
+beforeAll(() => {
+  runMigrations();
 });
 
 beforeEach(() => {
@@ -625,4 +631,71 @@ test("finishQueue: skips the timer when the wait is zero", async () => {
   const player = makePlayer();
   await player.finishQueue();
   expect(player.disconnectTimer).toBeNull();
+});
+
+// ---- persistence ----------------------------------------------------------
+test("restoreState: loads the queue and primes the current song as paused", () => {
+  const player = makePlayer();
+  player.restoreState({
+    queue: [song({ url: "a" }), song({ url: "b" })],
+    queuePosition: 1,
+    positionInSeconds: 42,
+    status: STATUS.PLAYING,
+    loopCurrentSong: true,
+    loopCurrentQueue: false,
+    volume: 55,
+  } as never);
+
+  expect(player.getCurrent()?.url).toBe("b");
+  expect(player.getPosition()).toBe(42);
+  expect(player.status).toBe(STATUS.PAUSED);
+  expect(player.loopCurrentSong).toBe(true);
+  expect(player.getVolume()).toBe(55);
+});
+
+test("restoreState: stays idle when the saved status was idle", () => {
+  const player = makePlayer();
+  player.restoreState({
+    queue: [song({ url: "a" })],
+    queuePosition: 0,
+    positionInSeconds: 0,
+    status: STATUS.IDLE,
+    loopCurrentSong: false,
+    loopCurrentQueue: false,
+    volume: null,
+  } as never);
+
+  expect(player.status).toBe(STATUS.IDLE);
+});
+
+test("forget: clears the persisted state for the guild", () => {
+  const player = makePlayer("p-forget");
+  player.add(song({ url: "a" }));
+  expect(loadPlayerState("p-forget")).toBeDefined();
+  player.forget();
+  expect(loadPlayerState("p-forget")).toBeUndefined();
+});
+
+test("save: a queue mutation persists the queue", () => {
+  const player = makePlayer("p-save");
+  player.add(song({ url: "a" }));
+  expect(loadPlayerState("p-save")?.queue).toHaveLength(1);
+});
+
+test("freezeAndSave: persists once, then blocks further saves", () => {
+  const player = makePlayer("p-freeze");
+  player.add(song({ url: "a" }));
+  player.freezeAndSave();
+  player.add(song({ url: "b" }));
+  expect(loadPlayerState("p-freeze")?.queue).toHaveLength(1);
+});
+
+test("leave: persists the queue without a channel but keeps it in memory", () => {
+  const player = makePlayer("p-leave");
+  player.add(song({ url: "a" }));
+  player.leave();
+  const row = loadPlayerState("p-leave");
+  expect(row?.voiceChannelId).toBeNull();
+  expect(row?.queue).toHaveLength(1);
+  expect(player.getCurrent()?.url).toBe("a");
 });

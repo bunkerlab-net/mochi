@@ -15,6 +15,13 @@
       "when": 1781463355717,
       "tag": "0001_zippy_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781608709298,
+      "tag": "0002_lowly_slapstick",
+      "breakpoints": true
     }
   ]
 }

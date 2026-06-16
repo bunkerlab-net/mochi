@@ -5,6 +5,7 @@ import {
   text,
   uniqueIndex,
 } from "drizzle-orm/sqlite-core";
+import type { QueuedSong } from "../services/player.js";
 
 /**
  * DateTime column stored to match what the previous Prisma + libSQL stack
@@ -104,7 +105,29 @@ export const favoriteQuery = sqliteTable(
   ],
 );
 
+// Per-guild player snapshot so the queue and voice connection survive a bot
+// restart. Written as the player mutates and on shutdown; cleared on an
+// intentional stop/disconnect. `status` holds the numeric STATUS enum.
+export const playerState = sqliteTable("PlayerState", {
+  guildId: text("guildId").primaryKey(),
+  voiceChannelId: text("voiceChannelId"),
+  queue: text("queue", { mode: "json" }).$type<QueuedSong[]>().notNull(),
+  queuePosition: integer("queuePosition").notNull().default(0),
+  positionInSeconds: integer("positionInSeconds").notNull().default(0),
+  status: integer("status").notNull(),
+  loopCurrentSong: integer("loopCurrentSong", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  loopCurrentQueue: integer("loopCurrentQueue", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  volume: integer("volume"),
+  createdAt,
+  updatedAt,
+});
+
 // Kept so callers can name row types without importing Prisma's generated
 // types (e.g. these were previously imported from the Prisma client).
 export type Setting = typeof setting.$inferSelect;
 export type FileCache = typeof fileCache.$inferSelect;
+export type PlayerState = typeof playerState.$inferSelect;

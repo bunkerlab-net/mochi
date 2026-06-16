@@ -19,6 +19,7 @@ import { isUserInVoice } from "./utils/channels.js";
 import errorMsg from "./utils/error-msg.js";
 import logger from "./utils/logger.js";
 import registerCommandsOnGuild from "./utils/register-commands-on-guild.js";
+import restorePlayers from "./utils/restore-players.js";
 
 @injectable()
 export default class {
@@ -220,6 +221,13 @@ export default class {
       "bot",
       `ready! invite the bot with https://discordapp.com/oauth2/authorize?client_id=${this.client.user?.id ?? ""}&scope=bot%20applications.commands&permissions=36700160`,
     );
+
+    try {
+      await restorePlayers();
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      logger.warn("bot", `failed to restore players: ${reason}`);
+    }
   }
 
   public async shutdown(): Promise<void> {
