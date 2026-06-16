@@ -27,7 +27,7 @@ export default class implements Command {
       throw new Error("not connected");
     }
 
-    player.disconnect();
+    player.leave();
 
     await interaction.reply("u betcha, disconnected");
   }

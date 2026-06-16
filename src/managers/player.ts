@@ -36,4 +36,10 @@ export default class {
       player.disconnect();
     }
   }
+
+  saveAndFreezeAll(): void {
+    for (const player of this.guildPlayers.values()) {
+      player.freezeAndSave();
+    }
+  }
 }

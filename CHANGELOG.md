@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Improve autoplay variety: instead of preferring Last.fm and only falling back to YouTube's radio mix, Mochi now gathers related tracks from both sources together (when `LASTFM_API_KEY` is set), de-duplicates across them, and shuffles the combined results before queuing. This blends the two recommendation styles and keeps refills varied; tracks already in the queue are still never repeated.
+- Remember the queue and voice channel across restarts: Mochi saves each server's queue, playback position, and current voice channel, so a restart or crash no longer loses your music. When it comes back online it rejoins the channel it was in and resumes the current track from where it left off. `/stop` still clears the queue and disconnects; `/disconnect` leaves the channel but keeps the queue, so a later `/play` or `/join` resumes it.
+- Add `/join` and its alias `/summon`: pull Mochi into your current voice channel on demand. If the queue already has music it starts playing immediately; otherwise it waits in the channel.
+- Fix `/next` erroring out instead of skipping: command aliases that extend another command (like `/next` and `/summon`) now declare their injected constructor, so the player is wired up correctly through the DI container.
+- Reduce audio dropouts on unreliable connections: Mochi now buffers a short cushion before playback starts and recovers from brief network stalls by reconnecting on dropped, failed, or timed-out streams, rather than treating a momentary interruption as the end of the track and skipping it.
+- Lower CPU use during playback: when playing at full volume with the 'lower volume when people speak' option disabled, Mochi now passes audio straight through instead of re-encoding every frame. Adjusting the volume or enabling that option automatically restores full processing, so both continue to work.
 
 ## [3.2.0] - 2026-06-15
 

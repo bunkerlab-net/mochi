@@ -25,7 +25,9 @@ const registerShutdownHandlers = () => {
     logger.info("shutdown", `received ${signal}, shutting down`);
 
     try {
-      container.get<PlayerManager>(TYPES.Managers.Player).disconnectAll();
+      const playerManager = container.get<PlayerManager>(TYPES.Managers.Player);
+      playerManager.saveAndFreezeAll();
+      playerManager.disconnectAll();
       await bot.shutdown();
     } catch (error) {
       logger.error("shutdown", error);

@@ -4,19 +4,19 @@ import Volume from "../../src/commands/volume.js";
 import { fakeInteraction, fakeManager } from "../helpers/discord.js";
 
 test("disconnect: disconnects when connected", async () => {
-  const disconnect = mock(() => {});
-  const cmd = new Disconnect(fakeManager({ voiceConnection: {}, disconnect }));
+  const leave = mock(() => {});
+  const cmd = new Disconnect(fakeManager({ voiceConnection: {}, leave }));
   const { interaction, replies } = fakeInteraction();
 
   await cmd.execute(interaction);
 
-  expect(disconnect).toHaveBeenCalled();
+  expect(leave).toHaveBeenCalled();
   expect(replies[0]).toContain("disconnected");
 });
 
 test("disconnect: throws when not connected", async () => {
   const cmd = new Disconnect(
-    fakeManager({ voiceConnection: null, disconnect: () => {} }),
+    fakeManager({ voiceConnection: null, leave: () => {} }),
   );
   const { interaction } = fakeInteraction();
 
