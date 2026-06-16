@@ -35,16 +35,17 @@ export default class implements Command {
       getMemberVoiceChannel(interaction.member as GuildMember) ??
       getMostPopularVoiceChannel(getGuild(interaction));
 
+    await interaction.deferReply();
     await player.connect(targetVoiceChannel);
 
     // Resume the queue if there's anything to play; otherwise just sit in the
     // channel.
     if (player.getCurrent()) {
       await player.play();
-      await interaction.reply("u betcha, joined and playing the queue");
+      await interaction.editReply("u betcha, joined and playing the queue");
       return;
     }
 
-    await interaction.reply("u betcha, joined");
+    await interaction.editReply("u betcha, joined");
   }
 }

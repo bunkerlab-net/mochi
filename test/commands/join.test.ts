@@ -15,7 +15,11 @@ const makeInteraction = () => {
   const interaction = {
     guild: { id: "guild-1" },
     member: { voice: { channel: voiceChannel } },
+    deferReply: async () => {},
     reply: async (message: string) => {
+      replies.push(String(message));
+    },
+    editReply: async (message: string) => {
       replies.push(String(message));
     },
   } as unknown as ChatInputCommandInteraction;
