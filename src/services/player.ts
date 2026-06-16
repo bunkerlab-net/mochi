@@ -78,6 +78,33 @@ export const DEFAULT_VOLUME = 100;
 // How many similar tracks to enqueue each time autoplay refills an empty queue.
 const AUTOPLAY_BATCH = 10;
 
+// Buffer a small cushion of transcoded audio before starting playback so a
+// brief source/network stall at the start of a track doesn't cause a dropout.
+// Capped by PREBUFFER_MAX_WAIT_MS so a slow or dead source can't hang playback.
+const PREBUFFER_BYTES = 128 * 1024;
+const PREBUFFER_MAX_WAIT_MS = 8_000;
+
+// ffmpeg input flags that keep an HTTP(S) source alive on a flaky link:
+// reconnect on drops, stalls, and transient HTTP errors, and time out a
+// silently stalled socket (value in microseconds) so playback recovers instead
+// of hanging until the player starves and skips the track.
+const STREAM_RECONNECT_OPTIONS = [
+  "-reconnect",
+  "1",
+  "-reconnect_streamed",
+  "1",
+  "-reconnect_on_network_error",
+  "1",
+  "-reconnect_on_http_error",
+  "4xx,5xx",
+  "-reconnect_delay_max",
+  "5",
+  "-rw_timeout",
+  "30000000",
+];
+
+type FfmpegCommand = ReturnType<typeof ffmpeg>;
+
 export default class {
   public voiceConnection: VoiceConnection | null = null;
   public status = STATUS.PAUSED;
@@ -91,6 +118,7 @@ export default class {
   private audioResource: AudioResource | null = null;
   private volume?: number;
   private defaultVolume: number = DEFAULT_VOLUME;
+  private pendingVolumeRebuild = false;
   private nowPlaying: QueuedSong | null = null;
   private playPositionInterval: NodeJS.Timeout | undefined;
   private lastSongURL = "";
@@ -235,6 +263,7 @@ export default class {
 
     const { seek, to } = this.trackBounds(currentSong, positionSeconds);
     const stream = await this.getStream(currentSong, { seek, to });
+    const inlineVolume = await this.shouldInlineVolume();
     this.audioPlayer = createAudioPlayer({
       behaviors: {
         // Needs to be somewhat high for livestreams
@@ -242,7 +271,7 @@ export default class {
       },
     });
     voiceConnection.subscribe(this.audioPlayer);
-    this.playAudioPlayerResource(this.createAudioStream(stream));
+    this.playAudioPlayerResource(this.createAudioStream(stream, inlineVolume));
     this.attachListeners();
     this.startTrackingPosition(positionSeconds);
 
@@ -278,7 +307,7 @@ export default class {
       this.status === STATUS.PAUSED &&
       currentSong.url === this.nowPlaying?.url
     ) {
-      if (this.audioPlayer) {
+      if (this.audioPlayer && !this.pendingVolumeRebuild) {
         this.audioPlayer.unpause();
         this.status = STATUS.PLAYING;
         this.startTrackingPosition();
@@ -286,7 +315,7 @@ export default class {
         return;
       }
 
-      // Was disconnected, need to recreate stream
+      // Disconnected, or volume mode changed while paused: recreate the stream
       if (!currentSong.isLive) {
         return this.seek(this.getPosition());
       }
@@ -302,6 +331,7 @@ export default class {
     try {
       const { seek, to } = this.trackBounds(currentSong, 0);
       const stream = await this.getStream(currentSong, { seek, to });
+      const inlineVolume = await this.shouldInlineVolume();
       this.audioPlayer = createAudioPlayer({
         behaviors: {
           // Needs to be somewhat high for livestreams
@@ -309,7 +339,9 @@ export default class {
         },
       });
       voiceConnection.subscribe(this.audioPlayer);
-      this.playAudioPlayerResource(this.createAudioStream(stream));
+      this.playAudioPlayerResource(
+        this.createAudioStream(stream, inlineVolume),
+      );
 
       this.attachListeners();
 
@@ -599,11 +631,43 @@ export default class {
     this.volume = level;
     this.setAudioPlayerVolume(level);
     this.save();
+    this.reconcileVolumeMode(level);
   }
 
   getVolume(): number {
     // Only use default volume if player volume is not already set (in the event of a reconnect we shouldn't reset)
     return this.volume ?? this.defaultVolume;
+  }
+
+  // ffmpeg already encodes Opus; with volume at 100 and ducking off we hand the
+  // packets straight to Discord (inlineVolume false) instead of paying for a
+  // decode/volume/re-encode per frame. The transformer is only needed when the
+  // level differs from 100 or the guild ducks volume on speech.
+  private async shouldInlineVolume(): Promise<boolean> {
+    const { turnDownVolumeWhenPeopleSpeak } = await getGuildSettings(
+      this.guildId,
+    );
+    return turnDownVolumeWhenPeopleSpeak || this.getVolume() !== 100;
+  }
+
+  // A pass-through resource carries no VolumeTransformer, so a non-unity gain
+  // can't apply until the resource is rebuilt with inlineVolume. Rebuild in
+  // place while playing; defer to the resume path when currently paused.
+  private reconcileVolumeMode(level: number): void {
+    const isPassthrough =
+      this.audioResource !== null && !this.audioResource.volume;
+    if (level === 100 || !isPassthrough) {
+      return;
+    }
+
+    if (this.status === STATUS.PLAYING) {
+      void this.seek(this.getPosition()).catch((error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        logger.error("player", `failed to apply volume change: ${reason}`);
+      });
+    } else if (this.status === STATUS.PAUSED) {
+      this.pendingVolumeRebuild = true;
+    }
   }
 
   private getCacheKey(song: QueuedSong): string {
@@ -684,16 +748,7 @@ export default class {
           : `not caching video for "${song.title}"`,
       );
 
-      ffmpegInputOptions.push(
-        ...[
-          "-reconnect",
-          "1",
-          "-reconnect_streamed",
-          "1",
-          "-reconnect_delay_max",
-          "5",
-        ],
-      );
+      ffmpegInputOptions.push(...STREAM_RECONNECT_OPTIONS);
 
       const headerOptions = this.buildFfmpegHeaderOptions(mediaSource.headers);
       ffmpegInputOptions.push(...headerOptions);
@@ -987,57 +1042,111 @@ export default class {
     ffmpegInputOptions?: string[];
     cache?: boolean;
   }): Promise<Readable> {
+    const capacitor = new WriteStream();
+
+    if (options?.cache) {
+      const cacheStream = this.fileCache.createWriteStream(
+        this.getHashForCache(options.cacheKey),
+      );
+      capacitor.createReadStream().pipe(cacheStream);
+    }
+
+    const stream = this.transcodeToOpus(
+      options.url,
+      options.ffmpegInputOptions,
+    );
+    stream.pipe(capacitor);
+
+    return this.prebufferedStream(capacitor, stream, Boolean(options.cache));
+  }
+
+  private transcodeToOpus(
+    url: string,
+    inputOptions: string[] | undefined,
+  ): FfmpegCommand {
+    return ffmpeg(url)
+      .inputOptions(inputOptions ?? ["-re"])
+      .noVideo()
+      .audioCodec("libopus")
+      .outputFormat("webm")
+      .on("start", (command) => {
+        logger.debug("player", `spawned ffmpeg with ${command}`);
+      });
+  }
+
+  // Resolve a playable read stream once ffmpeg has buffered a cushion (see
+  // monitorPrebuffer), rejecting only if ffmpeg errors before playback starts.
+  private prebufferedStream(
+    capacitor: WriteStream,
+    stream: FfmpegCommand,
+    cache: boolean,
+  ): Promise<Readable> {
+    const returnedStream = capacitor.createReadStream();
+
     return new Promise((resolve, reject) => {
-      const capacitor = new WriteStream();
+      let settled = false;
 
-      if (options?.cache) {
-        const cacheStream = this.fileCache.createWriteStream(
-          this.getHashForCache(options.cacheKey),
-        );
-        capacitor.createReadStream().pipe(cacheStream);
-      }
-
-      const returnedStream = capacitor.createReadStream();
-      let hasReturnedStreamClosed = false;
-
-      const stream = ffmpeg(options.url)
-        .inputOptions(options?.ffmpegInputOptions ?? ["-re"])
-        .noVideo()
-        .audioCodec("libopus")
-        .outputFormat("webm")
-        .on("error", (error) => {
-          if (!hasReturnedStreamClosed) {
-            reject(error);
-          }
-        })
-        .on("start", (command) => {
-          logger.debug("player", `spawned ffmpeg with ${command}`);
-        });
-
-      stream.pipe(capacitor);
-
-      returnedStream.on("close", () => {
-        if (!options.cache) {
-          stream.kill("SIGKILL");
+      stream.on("error", (error) => {
+        if (!settled) {
+          settled = true;
+          reject(error);
         }
-
-        hasReturnedStreamClosed = true;
       });
 
-      resolve(returnedStream);
+      returnedStream.on("close", () => {
+        if (!cache) {
+          stream.kill("SIGKILL");
+        }
+      });
+
+      this.monitorPrebuffer(capacitor, () => {
+        if (!settled) {
+          settled = true;
+          resolve(returnedStream);
+        }
+      });
     });
   }
 
-  private createAudioStream(stream: Readable) {
+  // Meter ffmpeg output via a throwaway read stream and call `onReady` once a
+  // cushion is buffered, the input ends (short track), or the cap elapses so a
+  // slow source can't stall startup.
+  private monitorPrebuffer(capacitor: WriteStream, onReady: () => void): void {
+    const monitor = capacitor.createReadStream();
+    let buffered = 0;
+    let done = false;
+    const finish = () => {
+      if (done) {
+        return;
+      }
+
+      done = true;
+      clearTimeout(timer);
+      monitor.destroy();
+      onReady();
+    };
+    const timer = setTimeout(finish, PREBUFFER_MAX_WAIT_MS);
+    monitor.on("data", (chunk: Buffer) => {
+      buffered += chunk.length;
+      if (buffered >= PREBUFFER_BYTES) {
+        finish();
+      }
+    });
+    monitor.on("end", finish);
+    monitor.on("error", finish);
+  }
+
+  private createAudioStream(stream: Readable, inlineVolume: boolean) {
     return createAudioResource(stream, {
       inputType: StreamType.WebmOpus,
-      inlineVolume: true,
+      inlineVolume,
     });
   }
 
   private playAudioPlayerResource(resource: AudioResource) {
     if (this.audioPlayer !== null) {
       this.audioResource = resource;
+      this.pendingVolumeRebuild = false;
       this.setAudioPlayerVolume();
       this.audioPlayer.play(this.audioResource);
     }

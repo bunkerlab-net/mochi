@@ -27,7 +27,17 @@ mock.module("../../src/utils/yt-dlp.js", () => ({
   getSoundCloudMediaSource: async () => mediaSource,
 }));
 
-const fakeReadable = () => ({ on: () => {}, pipe: () => {} });
+const fakeReadable = () => ({
+  on: (event: string, cb: () => void) => {
+    // The prebuffer monitor settles on the input stream's "end"; fire it so
+    // createReadStream resolves without waiting for the real timeout.
+    if (event === "end") {
+      queueMicrotask(cb);
+    }
+  },
+  pipe: () => {},
+  destroy: () => {},
+});
 
 class FakeWriteStream {
   createReadStream() {
@@ -77,9 +87,20 @@ const makeAudioPlayer = () => {
   };
 };
 
+// Capture the inlineVolume decision and model the real library: a pass-through
+// resource (inlineVolume false) carries no `.volume` transformer.
+let lastInlineVolume: boolean | undefined;
+const makeAudioResource = (
+  _stream: unknown,
+  options: { inlineVolume?: boolean },
+) => {
+  lastInlineVolume = options?.inlineVolume;
+  return options?.inlineVolume ? { volume: { setVolume: () => {} } } : {};
+};
+
 mock.module("@discordjs/voice", () => ({
   createAudioPlayer: () => makeAudioPlayer(),
-  createAudioResource: () => ({ volume: { setVolume: () => {} } }),
+  createAudioResource: makeAudioResource,
   joinVoiceChannel: () => makeVoiceConnection(),
   entersState: () => entersStateImpl(),
   StreamType: { WebmOpus: "webm/opus" },
@@ -172,6 +193,7 @@ beforeEach(() => {
     isLive: false,
   };
   entersStateImpl = async () => {};
+  lastInlineVolume = undefined;
 });
 
 afterEach(() => {
@@ -390,6 +412,63 @@ test("seek: repositions and resumes playback", async () => {
   player.add(song({ length: 300 }));
   player.voiceConnection = makeVoiceConnection() as never;
   await player.seek(30);
+  expect(player.status).toBe(STATUS.PLAYING);
+});
+
+test("play: uses opus pass-through at volume 100 with ducking off", async () => {
+  const player = makePlayer();
+  player.add(song());
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  expect(lastInlineVolume).toBe(false);
+});
+
+test("play: enables inlineVolume when the guild ducks on speech", async () => {
+  settings.turnDownVolumeWhenPeopleSpeak = true;
+  const player = makePlayer();
+  player.add(song());
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  expect(lastInlineVolume).toBe(true);
+});
+
+test("play: enables inlineVolume when volume is not 100", async () => {
+  const player = makePlayer();
+  player.add(song());
+  player.voiceConnection = makeVoiceConnection() as never;
+  player.setVolume(60);
+  await player.play();
+  expect(lastInlineVolume).toBe(true);
+});
+
+test("setVolume: rebuilds a pass-through resource while playing", async () => {
+  const player = makePlayer();
+  player.add(song());
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  expect(lastInlineVolume).toBe(false);
+
+  player.setVolume(50);
+  // The rebuild seek is fire-and-forget; let its async chain settle.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(lastInlineVolume).toBe(true);
+  expect(player.status).toBe(STATUS.PLAYING);
+});
+
+test("setVolume: defers the rebuild until resume when paused", async () => {
+  const player = makePlayer();
+  player.add(song());
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.pause();
+
+  player.setVolume(50);
+  expect(player.pendingVolumeRebuild).toBe(true);
+  expect(lastInlineVolume).toBe(false);
+
+  await player.play();
+  expect(lastInlineVolume).toBe(true);
+  expect(player.pendingVolumeRebuild).toBe(false);
   expect(player.status).toBe(STATUS.PLAYING);
 });
 
