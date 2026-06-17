@@ -34,19 +34,10 @@ COPY package.json bun.lock bunfig.toml ./
 COPY patches ./patches
 
 # --production omits devDependencies (typescript, biome, drizzle-kit, release-it,
-# @types/*). The bundle only needs runtime dependencies, so this node_modules is
-# what the runner copies — no dev tooling ships in the image.
+# @types/*). The runner copies this node_modules verbatim; no dev tooling ships
+# in the image.
 RUN bun install --frozen-lockfile --production
 
-FROM dependencies AS builder
-
-WORKDIR /usr/app
-
-COPY . .
-
-RUN bun run build
-
-# Only keep what's necessary to run
 FROM base AS runner
 
 # Run as the image's baked-in non-root "bun" user (uid 1000). Setting USER before
@@ -58,11 +49,8 @@ USER bun
 WORKDIR /data
 WORKDIR /usr/app
 
-COPY --from=builder --chown=bun:bun /usr/app/node_modules ./node_modules
-COPY --from=builder --chown=bun:bun /usr/app/dist ./dist
-# Migrations are read from disk at runtime by the in-process migrator.
-COPY --chown=bun:bun drizzle ./drizzle
-COPY --chown=bun:bun package.json ./
+COPY --from=dependencies --chown=bun:bun /usr/app/node_modules ./node_modules
+COPY --chown=bun:bun . .
 
 ARG COMMIT_HASH=unknown
 ARG BUILD_DATE=unknown
@@ -73,4 +61,4 @@ ENV COMMIT_HASH=$COMMIT_HASH
 ENV BUILD_DATE=$BUILD_DATE
 ENV ENV_FILE=/config
 
-CMD ["tini", "--", "bun", "dist/migrate-and-start.js"]
+CMD ["tini", "--", "bun", "src/scripts/migrate-and-start.ts"]
