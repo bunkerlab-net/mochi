@@ -19,7 +19,7 @@ test("pause: pauses a playing track", async () => {
   const { interaction, replies } = fakeInteraction();
   await cmd.execute(interaction);
   expect(pause).toHaveBeenCalled();
-  expect(replies[0]).toContain("red");
+  expect(replies[0]).toContain("lantern");
 });
 
 test("pause: throws when not playing", async () => {

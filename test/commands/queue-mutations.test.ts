@@ -13,7 +13,7 @@ test("clear: empties the queue and confirms", async () => {
   await cmd.execute(interaction);
 
   expect(clear).toHaveBeenCalled();
-  expect(replies[0]).toContain("clearer");
+  expect(replies[0]).toContain("rice paddy");
 });
 
 test("shuffle: shuffles a non-empty queue", async () => {

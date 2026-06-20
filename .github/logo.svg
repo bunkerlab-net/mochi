@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000" role="img" aria-label="Mochi logo">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#3D4080" />
+      <stop offset="100%" stop-color="#262949" />
+    </radialGradient>
+    <linearGradient id="mochi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF8EE" />
+      <stop offset="100%" stop-color="#FBE7D0" />
+    </linearGradient>
+  </defs>
+
+  <!-- indigo (ai) badge -->
+  <circle cx="500" cy="500" r="500" fill="url(#bg)" />
+
+  <!-- steam wisps: fresh-steamed, a nod to Bun -->
+  <g fill="none" stroke="#FFF3E6" stroke-width="14" stroke-linecap="round" opacity="0.4">
+    <path d="M455,332 C435,307 473,294 455,269 C439,247 471,234 457,213" />
+    <path d="M545,332 C565,307 527,294 545,269 C561,247 529,234 543,213" />
+  </g>
+
+  <!-- matcha eighth note -->
+  <g fill="#9FC081">
+    <ellipse cx="735" cy="372" rx="44" ry="33" transform="rotate(-18 735 372)" />
+    <rect x="767" y="224" width="15" height="150" />
+    <path d="M782,224 C834,244 830,300 798,322 C822,290 814,256 782,264 Z" />
+  </g>
+
+  <!-- grounding shadow -->
+  <ellipse cx="500" cy="790" rx="205" ry="30" fill="#1E2040" opacity="0.35" />
+
+  <!-- mochi body -->
+  <path d="M500,360 C642,360 762,438 762,565 C762,694 652,772 500,772 C348,772 238,694 238,565 C238,438 358,360 500,360 Z" fill="url(#mochi)" />
+
+  <!-- glossy highlight -->
+  <ellipse cx="408" cy="452" rx="84" ry="48" transform="rotate(-22 408 452)" fill="#FFFFFF" opacity="0.30" />
+
+  <!-- sakura cheeks -->
+  <g fill="#F4A6C0" opacity="0.9">
+    <circle cx="388" cy="602" r="30" />
+    <circle cx="612" cy="602" r="30" />
+  </g>
+
+  <!-- eyes -->
+  <g fill="#3A3D55">
+    <ellipse cx="440" cy="548" rx="22" ry="30" />
+    <ellipse cx="560" cy="548" rx="22" ry="30" />
+  </g>
+  <g fill="#FFFFFF">
+    <circle cx="433" cy="536" r="8" />
+    <circle cx="553" cy="536" r="8" />
+  </g>
+
+  <!-- smile -->
+  <path d="M462,598 Q500,634 538,598" fill="none" stroke="#3A3D55" stroke-width="12" stroke-linecap="round" />
+</svg>

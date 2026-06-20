@@ -23,6 +23,6 @@ export default class implements Command {
   public async execute(interaction: ChatInputCommandInteraction) {
     this.playerManager.get(getGuildId(interaction)).clear();
 
-    await interaction.reply("clearer than a field after a fresh harvest");
+    await interaction.reply("clear as a rice paddy after the harvest");
   }
 }

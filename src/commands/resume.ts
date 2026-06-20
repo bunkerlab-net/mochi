@@ -50,7 +50,7 @@ export default class implements Command {
     await player.play();
 
     await interaction.editReply({
-      content: "the stop-and-go light is now green",
+      content: "the paper lantern glows again",
       embeds: [buildPlayingMessageEmbed(player)],
     });
   }

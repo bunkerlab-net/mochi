@@ -1,5 +1,5 @@
 <p align="center">
-  <img width="250" height="250" src="https://raw.githubusercontent.com/bunkerlab-net/mochi/master/.github/logo.png">
+  <img width="250" height="250" src="https://raw.githubusercontent.com/bunkerlab-net/mochi/master/.github/logo.svg">
 </p>
 
 > [!IMPORTANT]

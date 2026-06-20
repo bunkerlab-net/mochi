@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Redesign `/config`: the ten separate `/config set-*` subcommands are replaced by a single `/config set <key> <value>`, and `/config get <key>` now shows one setting's current value, accepted input, and how to change it (omit the key to list everything). Settings are picked from a dropdown of keys, and `set` accepts friendly values such as `true`/`false`/`yes`/`no` for toggles with clear validation errors. All `/config` replies are now private (ephemeral), so viewing or changing settings no longer posts to the channel.
 - Remove the `/autoplay` command in favor of `/config set autoplay true|false`, so every per-server setting is managed through `/config`. Autoplay behavior is unchanged and remains on by default.
 - Add a `/help` command that lists every available command and its description in a private (ephemeral) reply. The list is generated from the live command registry, so it always reflects the commands that are actually installed.
+- Align the bot's persona and branding with Mochi's East-Asian theme: reword user-facing replies (the error prefix `ope` becomes `aiya`, the `u betcha` confirmations become `hai`, and the `/clear`, `/pause`, and `/resume` flavor text is rethemed), rename the Compose data directory from `muse/` to `mochi/`, and replace the logo with a new mochi `logo.svg`.
 
 ## [3.2.1] - 2026-06-16
 

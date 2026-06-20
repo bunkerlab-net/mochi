@@ -6,11 +6,11 @@ test("returns a generic message when given nothing", () => {
 });
 
 test("wraps a string error", () => {
-  expect(errorMsg("boom")).toBe("🚫 ope: boom");
+  expect(errorMsg("boom")).toBe("🚫 aiya: boom");
 });
 
 test("unwraps an Error instance's message", () => {
-  expect(errorMsg(new Error("kaboom"))).toBe("🚫 ope: kaboom");
+  expect(errorMsg(new Error("kaboom"))).toBe("🚫 aiya: kaboom");
 });
 
 test("an empty string is treated as falsy and yields the generic message", () => {

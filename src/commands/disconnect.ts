@@ -29,6 +29,6 @@ export default class implements Command {
 
     player.leave();
 
-    await interaction.reply("u betcha, disconnected");
+    await interaction.reply("hai, disconnected");
   }
 }

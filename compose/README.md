@@ -31,13 +31,13 @@ For a WARP+ subscription, uncomment and set `WARP_LICENSE_KEY` in the `warp` ser
 ```plaintext
 compose/
   docker-compose.yaml
-  muse/            # bind-mounted to mochi's /data; holds the SQLite DB, media cache, and .env
+  mochi/           # bind-mounted to mochi's /data; holds the SQLite DB, media cache, and .env
     .gitignore
   warp/            # bind-mounted to /var/lib/cloudflare-warp; holds WARP registration state
     .gitignore
 ```
 
-`muse/` and `warp/` are tracked directories whose contents are ignored (`**` except `.gitignore`). The empty mount points stay in version control, while your secrets, database, cache, and WARP state stay out of git.
+`mochi/` and `warp/` are tracked directories whose contents are ignored (`**` except `.gitignore`). The empty mount points stay in version control, while your secrets, database, cache, and WARP state stay out of git.
 
 ## Prerequisites
 
@@ -46,7 +46,7 @@ compose/
 
 ## Setup
 
-1. Create the environment file at `compose/muse/.env`. The `mochi` service loads it via `env_file`, and it is gitignored, so it is the right place for secrets. A minimal file:
+1. Create the environment file at `compose/mochi/.env`. The `mochi` service loads it via `env_file`, and it is gitignored, so it is the right place for secrets. A minimal file:
 
    ```dotenv
    # Required
@@ -66,7 +66,7 @@ compose/
    # ENABLE_SPONSORBLOCK=true
    ```
 
-   Leave `DATA_DIR` alone; the image already points it at `/data`, which is the `./muse` bind mount. The root README documents the full list of variables (logging, SponsorBlock, bot status, yt-dlp auto-update, and so on) in its [Configuration section](../README.md#-configuration-advanced).
+   Leave `DATA_DIR` alone; the image already points it at `/data`, which is the `./mochi` bind mount. The root README documents the full list of variables (logging, SponsorBlock, bot status, yt-dlp auto-update, and so on) in its [Configuration section](../README.md#-configuration-advanced).
 
 2. Start the stack from this directory:
 
@@ -111,6 +111,6 @@ The Mochi image does not define a healthcheck, so autoheal will not restart `moc
 
 ## Data, backups, and permissions
 
-- `muse/` holds the SQLite database and the media cache (capped at about 2 GB by default via `CACHE_LIMIT`). Back this directory up to keep guild settings, favorites, and saved state. Reusing it across image upgrades keeps the same bot identity and data.
+- `mochi/` holds the SQLite database and the media cache (capped at about 2 GB by default via `CACHE_LIMIT`). Back this directory up to keep guild settings, favorites, and saved state. Reusing it across image upgrades keeps the same bot identity and data.
 - `warp/` holds the WARP registration; keeping it avoids re-registering on every restart.
-- The container runs as the non-root `bun` user (uid 1000). If you hit permission errors on the bind mounts, make sure `muse/` and `warp/` are writable by uid 1000 (for example `sudo chown -R 1000:1000 muse warp`).
+- The container runs as the non-root `bun` user (uid 1000). If you hit permission errors on the bind mounts, make sure `mochi/` and `warp/` are writable by uid 1000 (for example `sudo chown -R 1000:1000 mochi warp`).

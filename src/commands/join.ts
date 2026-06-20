@@ -42,10 +42,10 @@ export default class implements Command {
     // channel.
     if (player.getCurrent()) {
       await player.play();
-      await interaction.editReply("u betcha, joined and playing the queue");
+      await interaction.editReply("hai, joined and playing the queue");
       return;
     }
 
-    await interaction.editReply("u betcha, joined");
+    await interaction.editReply("hai, joined");
   }
 }
