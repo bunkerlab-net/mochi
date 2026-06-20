@@ -51,7 +51,7 @@ test("join: connects without playing when the queue is empty", async () => {
 
   expect(connect).toHaveBeenCalled();
   expect(play).not.toHaveBeenCalled();
-  expect(replies[0]).toBe("u betcha, joined");
+  expect(replies[0]).toBe("hai, joined");
 });
 
 test("summon: joins and plays like join", async () => {

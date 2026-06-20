@@ -43,9 +43,9 @@ services:
     container_name: mochi
     restart: unless-stopped
     volumes:
-      - ./muse:/data
+      - ./mochi:/data
     env_file:
-      - ./muse/.env
+      - ./mochi/.env
     network_mode: service:warp
     depends_on:
       warp:

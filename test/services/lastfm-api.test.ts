@@ -27,7 +27,7 @@ const makeApi = (responses: Responses) => {
   return api;
 };
 
-const seed = { artist: "Radiohead", title: "Creep" };
+const seed = { artist: "YOASOBI", title: "Idol" };
 
 test("getSimilar: returns empty when the seed has no artist", async () => {
   const api = makeApi({});
@@ -83,13 +83,15 @@ test("getSimilar: drops entries missing a name or artist", async () => {
 test("getSimilar: falls back to similar artists' top tracks", async () => {
   const api = makeApi({
     "track.getsimilar": { similartracks: { track: [] } },
-    "artist.getsimilar": { similarartists: { artist: [{ name: "Muse" }] } },
+    "artist.getsimilar": {
+      similarartists: { artist: [{ name: "Kenshi Yonezu" }] },
+    },
     "artist.gettoptracks": {
-      toptracks: { track: [{ name: "Hysteria", artist: "Muse" }] },
+      toptracks: { track: [{ name: "Lemon", artist: "Kenshi Yonezu" }] },
     },
   });
   expect(await api.getSimilar(seed, 5)).toEqual([
-    { name: "Hysteria", artist: "Muse" },
+    { name: "Lemon", artist: "Kenshi Yonezu" },
   ]);
 });
 
@@ -149,7 +151,9 @@ test("getSimilar: returns empty when the track request throws", async () => {
 test("getSimilar: returns empty when top-tracks requests all throw", async () => {
   const api = makeApi({
     "track.getsimilar": { similartracks: { track: [] } },
-    "artist.getsimilar": { similarartists: { artist: [{ name: "Muse" }] } },
+    "artist.getsimilar": {
+      similarartists: { artist: [{ name: "Kenshi Yonezu" }] },
+    },
     "artist.gettoptracks": () => {
       throw new Error("toptracks down");
     },

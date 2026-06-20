@@ -18,17 +18,20 @@ export interface FakeInteractionOptions {
 export const fakeInteraction = (opts: FakeInteractionOptions = {}) => {
   const replies: string[] = [];
   const responses: unknown[] = [];
+  const replyPayloads: unknown[] = [];
   const interaction = {
     guild: {
       id: opts.guildId ?? "guild-1",
       ownerId: opts.ownerId ?? "owner-1",
     },
     member: { user: { id: opts.userId ?? "user-1" } },
-    reply: async (message: string) => {
+    reply: async (message: unknown) => {
+      replyPayloads.push(message);
       replies.push(String(message));
     },
     deferReply: async () => {},
-    editReply: async (message: string) => {
+    editReply: async (message: unknown) => {
+      replyPayloads.push(message);
       replies.push(String(message));
     },
     respond: async (choices: unknown) => {
@@ -41,7 +44,7 @@ export const fakeInteraction = (opts: FakeInteractionOptions = {}) => {
       getBoolean: (name: string) => opts.booleans?.[name] ?? null,
     },
   } as unknown as ChatInputCommandInteraction;
-  return { interaction, replies, responses };
+  return { interaction, replies, responses, replyPayloads };
 };
 
 export const fakeManager = (player: unknown) =>

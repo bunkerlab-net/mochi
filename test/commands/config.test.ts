@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, expect, mock, test } from "bun:test";
+import { MessageFlags } from "discord.js";
 import { eq } from "drizzle-orm";
 import { db, runMigrations } from "../../src/db/index.js";
 import { setting } from "../../src/db/schema.js";
@@ -11,14 +12,21 @@ mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => settingsRow,
 }));
 
+// Dynamic import (not static): the mock above must register before config.js and
+// its get-guild-settings dependency are evaluated, and a hoisted static import
+// would bind the real module first.
 const { default: ConfigCmd } = await import("../../src/commands/config.js");
 
 const row = () =>
   db.select().from(setting).where(eq(setting.guildId, "guild-1")).get();
 
 const run = (opts: Parameters<typeof fakeInteraction>[0]) => {
-  const { interaction, replies } = fakeInteraction(opts);
-  return { promise: new ConfigCmd().execute(interaction), replies };
+  const { interaction, replies, replyPayloads } = fakeInteraction(opts);
+  return {
+    promise: new ConfigCmd().execute(interaction),
+    replies,
+    replyPayloads,
+  };
 };
 
 beforeAll(() => {
@@ -32,98 +40,100 @@ beforeEach(() => {
     playlistLimit: 50,
     secondsToWaitAfterQueueEmpties: 0,
     leaveIfNoListeners: true,
+    queueAddResponseEphemeral: false,
     autoAnnounceNextSong: false,
     autoplay: true,
-    queueAddResponseEphemeral: false,
     defaultVolume: 100,
     defaultQueuePageSize: 10,
     turnDownVolumeWhenPeopleSpeak: false,
+    turnDownVolumeWhenPeopleSpeakTarget: 20,
   };
 });
 
-test("set-playlist-limit updates the row", async () => {
-  await run({ subcommand: "set-playlist-limit", integers: { limit: 20 } })
-    .promise;
+test("set updates an integer setting", async () => {
+  await run({
+    subcommand: "set",
+    strings: { key: "playlist-limit", value: "20" },
+  }).promise;
   expect(row()?.playlistLimit).toBe(20);
 });
 
-test("set-playlist-limit rejects a limit below 1", async () => {
-  const { promise } = run({
-    subcommand: "set-playlist-limit",
-    integers: { limit: 0 },
-  });
-  expect(promise).rejects.toThrow("invalid limit");
-});
-
-test("set-wait-after-queue-empties updates the row", async () => {
+test("set updates a boolean setting from a friendly value", async () => {
   await run({
-    subcommand: "set-wait-after-queue-empties",
-    integers: { delay: 45 },
-  }).promise;
-  expect(row()?.secondsToWaitAfterQueueEmpties).toBe(45);
-});
-
-test("set-leave-if-no-listeners updates the row", async () => {
-  await run({
-    subcommand: "set-leave-if-no-listeners",
-    booleans: { value: false },
+    subcommand: "set",
+    strings: { key: "leave-if-no-listeners", value: "no" },
   }).promise;
   expect(row()?.leaveIfNoListeners).toBe(false);
 });
 
-test("set-queue-add-response-hidden updates the row", async () => {
+test("set maps each key to its own column", async () => {
   await run({
-    subcommand: "set-queue-add-response-hidden",
-    booleans: { value: true },
-  }).promise;
-  expect(row()?.queueAddResponseEphemeral).toBe(true);
-});
-
-test("set-auto-announce-next-song updates the row", async () => {
-  await run({
-    subcommand: "set-auto-announce-next-song",
-    booleans: { value: true },
-  }).promise;
-  expect(row()?.autoAnnounceNextSong).toBe(true);
-});
-
-test("set-default-volume updates the row", async () => {
-  await run({ subcommand: "set-default-volume", integers: { level: 50 } })
-    .promise;
-  expect(row()?.defaultVolume).toBe(50);
-});
-
-test("set-default-queue-page-size updates the row", async () => {
-  await run({
-    subcommand: "set-default-queue-page-size",
-    integers: { "page-size": 20 },
-  }).promise;
-  expect(row()?.defaultQueuePageSize).toBe(20);
-});
-
-test("set-reduce-vol-when-voice updates the row", async () => {
-  await run({
-    subcommand: "set-reduce-vol-when-voice",
-    booleans: { value: true },
-  }).promise;
-  expect(row()?.turnDownVolumeWhenPeopleSpeak).toBe(true);
-});
-
-test("set-reduce-vol-when-voice-target updates the row", async () => {
-  await run({
-    subcommand: "set-reduce-vol-when-voice-target",
-    integers: { volume: 30 },
+    subcommand: "set",
+    strings: { key: "reduce-vol-when-voice-target", value: "30" },
   }).promise;
   expect(row()?.turnDownVolumeWhenPeopleSpeakTarget).toBe(30);
 });
 
-test("get: replies with a settings embed", async () => {
-  const { promise, replies } = run({ subcommand: "get" });
+test("set replies ephemerally", async () => {
+  const { promise, replyPayloads } = run({
+    subcommand: "set",
+    strings: { key: "default-volume", value: "50" },
+  });
   await promise;
-  expect(replies).toHaveLength(1);
+  expect(row()?.defaultVolume).toBe(50);
+  expect(replyPayloads[0]).toMatchObject({ flags: MessageFlags.Ephemeral });
+});
+
+test("set rejects an out-of-range integer", async () => {
+  const { promise } = run({
+    subcommand: "set",
+    strings: { key: "playlist-limit", value: "0" },
+  });
+  await expect(promise).rejects.toThrow("at least 1");
+});
+
+test("set rejects a non-numeric integer", async () => {
+  const { promise } = run({
+    subcommand: "set",
+    strings: { key: "default-volume", value: "loud" },
+  });
+  await expect(promise).rejects.toThrow("whole number");
+});
+
+test("set rejects an unknown key", async () => {
+  const { promise } = run({
+    subcommand: "set",
+    strings: { key: "bogus", value: "1" },
+  });
+  await expect(promise).rejects.toThrow("unknown setting");
+});
+
+test("get without a key lists every setting, ephemerally", async () => {
+  const { promise, replyPayloads } = run({ subcommand: "get" });
+  await promise;
+  expect(replyPayloads).toHaveLength(1);
+  expect(replyPayloads[0]).toMatchObject({ flags: MessageFlags.Ephemeral });
+});
+
+test("get with a key shows that setting's detail", async () => {
+  const { promise, replyPayloads } = run({
+    subcommand: "get",
+    strings: { key: "default-volume" },
+  });
+  await promise;
+  expect(replyPayloads).toHaveLength(1);
+  expect(replyPayloads[0]).toMatchObject({ flags: MessageFlags.Ephemeral });
+});
+
+test("get rejects an unknown key", async () => {
+  const { promise } = run({
+    subcommand: "get",
+    strings: { key: "bogus" },
+  });
+  await expect(promise).rejects.toThrow("unknown setting");
 });
 
 test("throws on an unknown subcommand", async () => {
   const { promise } = run({ subcommand: "bogus" });
-  expect(promise).rejects.toThrow("unknown subcommand");
+  await expect(promise).rejects.toThrow("unknown subcommand");
 });
