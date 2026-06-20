@@ -2,12 +2,21 @@ import { SlashCommandBuilder } from "@discordjs/builders";
 import {
   type ChatInputCommandInteraction,
   EmbedBuilder,
+  MessageFlags,
   PermissionFlagsBits,
 } from "discord.js";
 import { eq } from "drizzle-orm";
 import { injectable } from "inversify";
 import { db } from "../db/index.js";
-import { setting } from "../db/schema.js";
+import { type Setting, setting } from "../db/schema.js";
+import {
+  CONFIG_SETTING_CHOICES,
+  CONFIG_SETTINGS,
+  CONFIG_SETTINGS_BY_KEY,
+  describeAllowedValues,
+  formatSettingValue,
+  parseSettingValue,
+} from "../utils/config-settings.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import { getGuildId } from "../utils/interaction.js";
 import type Command from "./index.js";
@@ -16,335 +25,139 @@ import type Command from "./index.js";
 export default class implements Command {
   public readonly slashCommand = new SlashCommandBuilder()
     .setName("config")
-    .setDescription("configure bot settings")
+    .setDescription("view and change bot settings")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild.toString())
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("set-playlist-limit")
-        .setDescription(
-          "set the maximum number of tracks that can be added from a playlist",
-        )
-        .addIntegerOption((option) =>
+        .setName("get")
+        .setDescription("show the current settings")
+        .addStringOption((option) =>
           option
-            .setName("limit")
-            .setDescription("maximum number of tracks")
-            .setRequired(true),
+            .setName("key")
+            .setDescription("a single setting to view (omit to show all)")
+            .addChoices(...CONFIG_SETTING_CHOICES),
         ),
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("set-wait-after-queue-empties")
-        .setDescription(
-          "set the time to wait before leaving the voice channel when queue empties",
-        )
-        .addIntegerOption((option) =>
+        .setName("set")
+        .setDescription("change a setting")
+        .addStringOption((option) =>
           option
-            .setName("delay")
-            .setDescription("delay in seconds (set to 0 to never leave)")
+            .setName("key")
+            .setDescription("the setting to change")
             .setRequired(true)
-            .setMinValue(0),
-        ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("set-leave-if-no-listeners")
-        .setDescription(
-          "set whether to leave when all other participants leave",
+            .addChoices(...CONFIG_SETTING_CHOICES),
         )
-        .addBooleanOption((option) =>
+        .addStringOption((option) =>
           option
             .setName("value")
-            .setDescription("whether to leave when everyone else leaves")
+            .setDescription("the new value (true/false, or a number)")
             .setRequired(true),
         ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("set-queue-add-response-hidden")
-        .setDescription(
-          "set whether bot responses to queue additions are only displayed to the requester",
-        )
-        .addBooleanOption((option) =>
-          option
-            .setName("value")
-            .setDescription(
-              "whether bot responses to queue additions are only displayed to the requester",
-            )
-            .setRequired(true),
-        ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("set-reduce-vol-when-voice")
-        .setDescription("set whether to turn down the volume when people speak")
-        .addBooleanOption((option) =>
-          option
-            .setName("value")
-            .setDescription("whether to turn down the volume when people speak")
-            .setRequired(true),
-        ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("set-reduce-vol-when-voice-target")
-        .setDescription("set the target volume when people speak")
-        .addIntegerOption((option) =>
-          option
-            .setName("volume")
-            .setDescription(
-              "volume percentage (0 is muted, 100 is max & default)",
-            )
-            .setMinValue(0)
-            .setMaxValue(100)
-            .setRequired(true),
-        ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("set-auto-announce-next-song")
-        .setDescription(
-          "set whether to announce the next song in the queue automatically",
-        )
-        .addBooleanOption((option) =>
-          option
-            .setName("value")
-            .setDescription(
-              "whether to announce the next song in the queue automatically",
-            )
-            .setRequired(true),
-        ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("set-default-volume")
-        .setDescription(
-          "set default volume used when entering the voice channel",
-        )
-        .addIntegerOption((option) =>
-          option
-            .setName("level")
-            .setDescription(
-              "volume percentage (0 is muted, 100 is max & default)",
-            )
-            .setMinValue(0)
-            .setMaxValue(100)
-            .setRequired(true),
-        ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
-        .setName("set-default-queue-page-size")
-        .setDescription("set the default page size of the /queue command")
-        .addIntegerOption((option) =>
-          option
-            .setName("page-size")
-            .setDescription("page size of the /queue command")
-            .setMinValue(1)
-            .setMaxValue(30)
-            .setRequired(true),
-        ),
-    )
-    .addSubcommand((subcommand) =>
-      subcommand.setName("get").setDescription("show all settings"),
     );
 
-  async execute(interaction: ChatInputCommandInteraction) {
-    // Ensure guild settings exist before trying to update
+  async execute(interaction: ChatInputCommandInteraction): Promise<void> {
+    // Ensure the guild's settings row exists before reading or updating it.
     await getGuildSettings(getGuildId(interaction));
 
     switch (interaction.options.getSubcommand()) {
-      case "set-playlist-limit":
-        await this.setPlaylistLimit(interaction);
-        break;
-      case "set-wait-after-queue-empties":
-        await this.setWaitAfterQueueEmpties(interaction);
-        break;
-      case "set-leave-if-no-listeners":
-        await this.setLeaveIfNoListeners(interaction);
-        break;
-      case "set-queue-add-response-hidden":
-        await this.setQueueAddResponseHidden(interaction);
-        break;
-      case "set-auto-announce-next-song":
-        await this.setAutoAnnounceNextSong(interaction);
-        break;
-      case "set-default-volume":
-        await this.setDefaultVolume(interaction);
-        break;
-      case "set-default-queue-page-size":
-        await this.setDefaultQueuePageSize(interaction);
-        break;
-      case "set-reduce-vol-when-voice":
-        await this.setReduceVolWhenVoice(interaction);
-        break;
-      case "set-reduce-vol-when-voice-target":
-        await this.setReduceVolWhenVoiceTarget(interaction);
-        break;
       case "get":
         await this.showSettings(interaction);
+        break;
+      case "set":
+        await this.setSetting(interaction);
         break;
       default:
         throw new Error("unknown subcommand");
     }
   }
 
-  private async setPlaylistLimit(
+  private async setSetting(
     interaction: ChatInputCommandInteraction,
   ): Promise<void> {
-    const limit: number = interaction.options.getInteger("limit", true);
-
-    if (limit < 1) {
-      throw new Error("invalid limit");
+    const key = interaction.options.getString("key", true);
+    const definition = CONFIG_SETTINGS_BY_KEY[key];
+    if (!definition) {
+      throw new Error(`unknown setting \`${key}\``);
     }
 
+    const value = parseSettingValue(
+      definition,
+      interaction.options.getString("value", true),
+    );
+
+    // `definition.column` is a validated `setting` column and `value` matches
+    // its declared type, but drizzle types each column individually, so a
+    // dynamic column key can't be expressed without a cast.
+    const update = {
+      [definition.column]: value,
+    } as unknown as Partial<Setting>;
     db.update(setting)
-      .set({ playlistLimit: limit })
+      .set(update)
       .where(eq(setting.guildId, getGuildId(interaction)))
       .run();
 
-    await interaction.reply("👍 limit updated");
-  }
-
-  private async setWaitAfterQueueEmpties(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const delay = interaction.options.getInteger("delay", true);
-
-    db.update(setting)
-      .set({ secondsToWaitAfterQueueEmpties: delay })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 wait delay updated");
-  }
-
-  private async setLeaveIfNoListeners(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const value = interaction.options.getBoolean("value", true);
-
-    db.update(setting)
-      .set({ leaveIfNoListeners: value })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 leave setting updated");
-  }
-
-  private async setQueueAddResponseHidden(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const value = interaction.options.getBoolean("value", true);
-
-    db.update(setting)
-      .set({ queueAddResponseEphemeral: value })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 queue add notification setting updated");
-  }
-
-  private async setAutoAnnounceNextSong(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const value = interaction.options.getBoolean("value", true);
-
-    db.update(setting)
-      .set({ autoAnnounceNextSong: value })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 auto announce setting updated");
-  }
-
-  private async setDefaultVolume(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const value = interaction.options.getInteger("level", true);
-
-    db.update(setting)
-      .set({ defaultVolume: value })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 volume setting updated");
-  }
-
-  private async setDefaultQueuePageSize(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const value = interaction.options.getInteger("page-size", true);
-
-    db.update(setting)
-      .set({ defaultQueuePageSize: value })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 default queue page size updated");
-  }
-
-  private async setReduceVolWhenVoice(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const value = interaction.options.getBoolean("value", true);
-
-    db.update(setting)
-      .set({ turnDownVolumeWhenPeopleSpeak: value })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 turn down volume setting updated");
-  }
-
-  private async setReduceVolWhenVoiceTarget(
-    interaction: ChatInputCommandInteraction,
-  ): Promise<void> {
-    const value = interaction.options.getInteger("volume", true);
-
-    db.update(setting)
-      .set({ turnDownVolumeWhenPeopleSpeakTarget: value })
-      .where(eq(setting.guildId, getGuildId(interaction)))
-      .run();
-
-    await interaction.reply("👍 turn down volume target setting updated");
+    await interaction.reply({
+      content: `👍 **${definition.label}** is now **${formatSettingValue(definition, value)}**`,
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   private async showSettings(
     interaction: ChatInputCommandInteraction,
   ): Promise<void> {
-    const embed = new EmbedBuilder().setTitle("Config");
-
     const config = await getGuildSettings(getGuildId(interaction));
+    const key = interaction.options.getString("key");
 
-    const settingsToShow = {
-      "Playlist Limit": config.playlistLimit,
-      "Wait before leaving after queue empty":
-        config.secondsToWaitAfterQueueEmpties === 0
-          ? "never leave"
-          : `${config.secondsToWaitAfterQueueEmpties}s`,
-      "Leave if there are no listeners": config.leaveIfNoListeners
-        ? "yes"
-        : "no",
-      "Auto announce next song in queue": config.autoAnnounceNextSong
-        ? "yes"
-        : "no",
-      "Autoplay similar music when queue ends": config.autoplay ? "yes" : "no",
-      "Add to queue responses show for requester only":
-        config.queueAddResponseEphemeral ? "yes" : "no",
-      "Default Volume": config.defaultVolume,
-      "Default queue page size": config.defaultQueuePageSize,
-      "Reduce volume when people speak": config.turnDownVolumeWhenPeopleSpeak
-        ? "yes"
-        : "no",
-    };
+    if (key) {
+      const definition = CONFIG_SETTINGS_BY_KEY[key];
+      if (!definition) {
+        throw new Error(`unknown setting \`${key}\``);
+      }
 
-    let description = "";
-    for (const [key, value] of Object.entries(settingsToShow)) {
-      description += `**${key}**: ${value}\n`;
+      const embed = new EmbedBuilder()
+        .setTitle(definition.label)
+        .setDescription(definition.description)
+        .addFields(
+          {
+            name: "Current value",
+            value: `\`${formatSettingValue(definition, config[definition.column])}\``,
+            inline: true,
+          },
+          {
+            name: "Accepts",
+            value: describeAllowedValues(definition),
+            inline: true,
+          },
+          {
+            name: "Change it",
+            value: `\`/config set key:${definition.key} value:<new value>\``,
+          },
+        );
+
+      await interaction.reply({
+        embeds: [embed],
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
     }
 
-    embed.setDescription(description);
+    const embed = new EmbedBuilder()
+      .setTitle("Config")
+      .setDescription(
+        CONFIG_SETTINGS.map(
+          (definition) =>
+            `**${definition.label}** — \`${definition.key}\`\n${formatSettingValue(definition, config[definition.column])}`,
+        ).join("\n\n"),
+      )
+      .setFooter({
+        text: "Change a value with /config set <key> <value> · details with /config get <key>",
+      });
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({
+      embeds: [embed],
+      flags: MessageFlags.Ephemeral,
+    });
   }
 }

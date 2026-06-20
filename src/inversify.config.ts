@@ -2,12 +2,12 @@ import "reflect-metadata";
 import { Client, GatewayIntentBits } from "discord.js";
 import { Container } from "inversify";
 import Bot from "./bot.js";
-import Autoplay from "./commands/autoplay.js";
 import Clear from "./commands/clear.js";
 import Config from "./commands/config.js";
 import Disconnect from "./commands/disconnect.js";
 import Favorites from "./commands/favorites.js";
 import ForwardSeek from "./commands/fseek.js";
+import Help from "./commands/help.js";
 // Commands
 import type Command from "./commands/index.js";
 import Join from "./commands/join.js";
@@ -104,12 +104,12 @@ if (config.LASTFM_API_KEY !== "") {
 
 // Commands
 [
-  Autoplay,
   Clear,
   Config,
   Disconnect,
   Favorites,
   ForwardSeek,
+  Help,
   Join,
   LoopQueue,
   Loop,

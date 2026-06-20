@@ -24,6 +24,7 @@ Mochi is a self-hosted Discord music bot for small to medium servers — think a
 - ⭐ Users can save favorite queries for reuse
 - 1️⃣ A single instance supports multiple guilds
 - 🔊 Configurable volume controls, including optional ducking when people speak
+- 📖 Built-in `/help` that lists every command and what it does
 - ✍️ Written in TypeScript, easily extendable
 
 ## Stack
@@ -147,7 +148,7 @@ Because SponsorBlock is a public service, it may be down or overloaded. When tha
 
 ### Autoplay
 
-When the queue runs out, Mochi keeps the music going by finding tracks similar to the one that just played (radio mode) instead of falling silent. It's **on by default** — toggle it per-server with the `/autoplay` command, and check the current state with `/config get`.
+When the queue runs out, Mochi keeps the music going by finding tracks similar to the one that just played (radio mode) instead of falling silent. It's **on by default** — toggle it per-server with `/config set autoplay true|false`, and check the current state with `/config get autoplay`.
 
 Mochi sources similar music two ways:
 
@@ -192,9 +193,9 @@ If Mochi runs in many guilds (10+), you may want to register commands bot-wide i
 
 Configure Mochi to automatically duck the volume while people are speaking:
 
-- `/config set-reduce-vol-when-voice true` — enable automatic volume reduction
-- `/config set-reduce-vol-when-voice false` — disable it
-- `/config set-reduce-vol-when-voice-target <volume>` — target volume percentage while people speak (0–100, default 70)
+- `/config set reduce-vol-when-voice true` — enable automatic volume reduction
+- `/config set reduce-vol-when-voice false` — disable it
+- `/config set reduce-vol-when-voice-target <volume>` — target volume percentage while people speak (0–100, default 20)
 
 ### ffmpeg path
 
