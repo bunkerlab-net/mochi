@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.2] - 2026-06-20
+
 - Redesign `/config`: the ten separate `/config set-*` subcommands are replaced by a single `/config set <key> <value>`, and `/config get <key>` now shows one setting's current value, accepted input, and how to change it (omit the key to list everything). Settings are picked from a dropdown of keys, and `set` accepts friendly values such as `true`/`false`/`yes`/`no` for toggles with clear validation errors. All `/config` replies are now private (ephemeral), so viewing or changing settings no longer posts to the channel.
 - Remove the `/autoplay` command in favor of `/config set autoplay true|false`, so every per-server setting is managed through `/config`. Autoplay behavior is unchanged and remains on by default.
 - Add a `/help` command that lists every available command and its description in a private (ephemeral) reply. The list is generated from the live command registry, so it always reflects the commands that are actually installed.
@@ -576,7 +578,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release
 
-[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.2.1...HEAD
+[Unreleased]: https://github.com/bunkerlab-net/mochi/compare/v3.2.2...HEAD
+[3.2.2]: https://github.com/bunkerlab-net/mochi/compare/v3.2.1...v3.2.2
 [3.2.1]: https://github.com/bunkerlab-net/mochi/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/bunkerlab-net/mochi/compare/v3.1.1...v3.2.0
 [3.1.1]: https://github.com/bunkerlab-net/mochi/compare/v3.1.0...v3.1.1
