@@ -247,6 +247,22 @@ test("front insertion keeps a multi-song batch in requested order", async () => 
   expect(added).toEqual(["s2", "s1"]);
 });
 
+test("front insertion reports the front-of-queue qualifier for multiple songs", async () => {
+  const player = fakePlayer({ voiceConnection: {} });
+  const cmd = make({
+    getSongs: async () => [[song(), song({ url: "v2" })], ""],
+    player,
+  });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({
+    ...baseArgs,
+    addToFrontOfQueue: true,
+    interaction: i,
+  });
+  expect(String(replies.at(-1))).toContain("other songs");
+  expect(String(replies.at(-1))).toContain("front of the");
+});
+
 test("starts playback when already connected but idle", async () => {
   const player = fakePlayer({ voiceConnection: {}, status: STATUS.IDLE });
   const cmd = make({ getSongs: async () => [[song()], ""], player });

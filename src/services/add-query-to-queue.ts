@@ -276,7 +276,7 @@ export default class AddQueryToQueue {
       );
     } else {
       await interaction.editReply(
-        `hai, **${firstSong.title}** and ${newSongs.length - 1} other songs were added to the queue${skipCurrentTrack ? " and current track skipped" : ""}${msg}`,
+        `hai, **${firstSong.title}** and ${newSongs.length - 1} other songs were added to the${addToFrontOfQueue ? " front of the" : ""} queue${skipCurrentTrack ? " and current track skipped" : ""}${msg}`,
       );
     }
   }
