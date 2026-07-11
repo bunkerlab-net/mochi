@@ -399,6 +399,7 @@ export default class {
   async forward(skip: number): Promise<void> {
     const previousPosition = this.queuePosition;
     const previousPositionInSeconds = this.positionInSeconds;
+    const previousStatus = this.status;
     this.manualForward(skip);
 
     // Advancing to a queued track (or an autoplay refill) always resumes
@@ -408,11 +409,13 @@ export default class {
       try {
         await this.play();
       } catch (error: unknown) {
-        // Starting the new track failed. If play()'s own recovery already
-        // finalized the queue (status IDLE, e.g. an unplayable last track),
-        // leave that end state; otherwise restore the pre-skip position so a
-        // skip that can't play doesn't strand the player mid-queue.
-        if (this.status !== STATUS.IDLE) {
+        // Starting the new track failed. If play()'s own recovery finalized the
+        // queue during this attempt (a non-IDLE player became IDLE, e.g. an
+        // unplayable last track), keep that end state; otherwise restore the
+        // pre-skip position so a skip that can't play doesn't strand the queue.
+        const finalizedDuringAttempt =
+          previousStatus !== STATUS.IDLE && this.status === STATUS.IDLE;
+        if (!finalizedDuringAttempt) {
           this.queuePosition = previousPosition;
           this.positionInSeconds = previousPositionInSeconds;
           this.save();

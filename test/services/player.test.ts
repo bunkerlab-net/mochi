@@ -566,6 +566,20 @@ test("forward: starts a fresh stream when the next entry shares a URL", async ()
   expect(lastInlineVolume).toBeDefined();
 });
 
+test("forward: rolls back the position when play fails from an idle loaded player", async () => {
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  player.status = STATUS.IDLE;
+  player.play = async () => {
+    throw new Error("cannot start");
+  };
+  await expect(player.forward(1)).rejects.toThrow("cannot start");
+  // The queue wasn't finalized, so the position returns to the pre-skip track.
+  expect(player.getCurrent()?.url).toBe("a");
+});
+
 test("forward: finishes the queue when nothing follows and autoplay is off", async () => {
   settings.autoplay = false;
   settings.secondsToWaitAfterQueueEmpties = 0;
