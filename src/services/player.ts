@@ -303,10 +303,7 @@ export default class {
     }
 
     // Resume from paused state
-    if (
-      this.status === STATUS.PAUSED &&
-      currentSong.url === this.nowPlaying?.url
-    ) {
+    if (this.status === STATUS.PAUSED && currentSong === this.nowPlaying) {
       if (this.audioPlayer && !this.pendingVolumeRebuild) {
         this.audioPlayer.unpause();
         this.status = STATUS.PLAYING;
@@ -404,27 +401,29 @@ export default class {
     const previousPositionInSeconds = this.positionInSeconds;
     this.manualForward(skip);
 
-    try {
-      if (this.getCurrent()) {
-        // Advancing to a queued track always resumes playback, so /skip and
-        // the add-and-skip path start the next song even from a paused player
-        // instead of staying paused.
+    // Advancing to a queued track (or an autoplay refill) always resumes
+    // playback, so /skip and the add-and-skip path start the next song even
+    // from a paused player instead of staying paused.
+    if (this.getCurrent() || (await this.tryAutoplay())) {
+      try {
         await this.play();
-      } else if (await this.tryAutoplay()) {
-        // Queue ran out — autoplay refilled it at the current position, so
-        // play it regardless of the previous pause state.
-        await this.play();
-      } else {
-        await this.finishQueue();
+      } catch (error: unknown) {
+        // Starting the new track failed. If play()'s own recovery already
+        // finalized the queue (status IDLE, e.g. an unplayable last track),
+        // leave that end state; otherwise restore the pre-skip position so a
+        // skip that can't play doesn't strand the player mid-queue.
+        if (this.status !== STATUS.IDLE) {
+          this.queuePosition = previousPosition;
+          this.positionInSeconds = previousPositionInSeconds;
+          this.save();
+        }
+        throw error;
       }
-    } catch (error: unknown) {
-      // Starting the new track failed — restore the pre-skip position so a
-      // skip that can't play doesn't strand the player mid-queue.
-      this.queuePosition = previousPosition;
-      this.positionInSeconds = previousPositionInSeconds;
-      this.save();
-      throw error;
+      return;
     }
+
+    // Queue genuinely ran out.
+    await this.finishQueue();
   }
 
   registerVoiceActivityListener(guildSettings: Setting) {

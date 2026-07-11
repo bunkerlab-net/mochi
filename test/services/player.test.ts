@@ -550,6 +550,22 @@ test("forward: resumes playback when skipping from a paused player", async () =>
   expect(player.status).toBe(STATUS.PLAYING);
 });
 
+test("forward: starts a fresh stream when the next entry shares a URL", async () => {
+  const player = makePlayer();
+  // Two chapters of one video: same url, different offsets.
+  player.add(song({ url: "vid", title: "ch1", offset: 0 }));
+  player.add(song({ url: "vid", title: "ch2", offset: 100 }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.pause();
+  lastInlineVolume = undefined;
+  await player.forward(1);
+  expect(player.getCurrent()?.title).toBe("ch2");
+  expect(player.status).toBe(STATUS.PLAYING);
+  // A fresh stream (not an unpause of ch1) must have been created for ch2.
+  expect(lastInlineVolume).toBeDefined();
+});
+
 test("forward: finishes the queue when nothing follows and autoplay is off", async () => {
   settings.autoplay = false;
   settings.secondsToWaitAfterQueueEmpties = 0;
