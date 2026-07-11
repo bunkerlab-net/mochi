@@ -38,36 +38,11 @@ export default class implements Command {
     this.cache = cache;
     this.addQueryToQueue = addQueryToQueue;
 
-    this.slashCommand = new SlashCommandBuilder()
-      .setName("play")
-      .setDescription("play a song")
-      .addStringOption((option) =>
-        option
-          .setName("query")
-          .setDescription(this.queryDescription())
-          .setAutocomplete(true)
-          .setRequired(true),
-      )
-      .addBooleanOption((option) =>
-        option
-          .setName("immediate")
-          .setDescription("add track to the front of the queue"),
-      )
-      .addBooleanOption((option) =>
-        option
-          .setName("shuffle")
-          .setDescription("shuffle the input if you're adding multiple tracks"),
-      )
-      .addBooleanOption((option) =>
-        option
-          .setName("split")
-          .setDescription("if a track has chapters, split it"),
-      )
-      .addBooleanOption((option) =>
-        option
-          .setName("skip")
-          .setDescription("skip the currently playing track"),
-      );
+    this.slashCommand = this.buildSlashCommand({
+      name: "play",
+      description: "play a song",
+      includeImmediateAndSkip: true,
+    });
   }
 
   // Query-option help text reflecting whether Spotify lookups are available.
@@ -77,6 +52,60 @@ export default class implements Command {
     return this.spotify
       ? "YouTube URL, Spotify URL, or search query"
       : "YouTube URL or search query";
+  }
+
+  // Builds the /play-family slash command. /play includes the `immediate` and
+  // `skip` toggles; variants like /playnow force those and omit them. Options
+  // are added in a fixed order so each command keeps its public option layout.
+  protected buildSlashCommand({
+    name,
+    description,
+    includeImmediateAndSkip,
+  }: {
+    name: string;
+    description: string;
+    includeImmediateAndSkip: boolean;
+  }): SharedSlashCommand {
+    const builder = new SlashCommandBuilder()
+      .setName(name)
+      .setDescription(description)
+      .addStringOption((option) =>
+        option
+          .setName("query")
+          .setDescription(this.queryDescription())
+          .setAutocomplete(true)
+          .setRequired(true),
+      );
+
+    if (includeImmediateAndSkip) {
+      builder.addBooleanOption((option) =>
+        option
+          .setName("immediate")
+          .setDescription("add track to the front of the queue"),
+      );
+    }
+
+    builder
+      .addBooleanOption((option) =>
+        option
+          .setName("shuffle")
+          .setDescription("shuffle the input if you're adding multiple tracks"),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName("split")
+          .setDescription("if a track has chapters, split it"),
+      );
+
+    if (includeImmediateAndSkip) {
+      builder.addBooleanOption((option) =>
+        option
+          .setName("skip")
+          .setDescription("skip the currently playing track"),
+      );
+    }
+
+    return builder;
   }
 
   public async execute(

@@ -411,13 +411,19 @@ export default class {
       } catch (error: unknown) {
         // Starting the new track failed. If play()'s own recovery finalized the
         // queue during this attempt (a non-IDLE player became IDLE, e.g. an
-        // unplayable last track), keep that end state; otherwise restore the
-        // pre-skip position so a skip that can't play doesn't strand the queue.
+        // unplayable last track), keep that end state. Otherwise the previous
+        // track is still current — the connection wasn't ready, so its audio
+        // never stopped — so restore the pre-skip position and playback state.
         const finalizedDuringAttempt =
           previousStatus !== STATUS.IDLE && this.status === STATUS.IDLE;
         if (!finalizedDuringAttempt) {
           this.queuePosition = previousPosition;
-          this.positionInSeconds = previousPositionInSeconds;
+          this.status = previousStatus;
+          if (previousStatus === STATUS.PLAYING) {
+            this.startTrackingPosition(previousPositionInSeconds);
+          } else {
+            this.positionInSeconds = previousPositionInSeconds;
+          }
           this.save();
         }
         throw error;

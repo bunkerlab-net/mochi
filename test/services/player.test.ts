@@ -580,6 +580,27 @@ test("forward: rolls back the position when play fails from an idle loaded playe
   expect(player.getCurrent()?.url).toBe("a");
 });
 
+test("forward: restores playing state when a skip fails without finalizing", async () => {
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.positionInSeconds = 7;
+  // Observe only the restore path, not the initial play's tracking.
+  const startTracking = mock((_position?: number) => {});
+  player.startTrackingPosition = startTracking;
+  player.play = async () => {
+    throw new Error("stream stalled");
+  };
+  await expect(player.forward(1)).rejects.toThrow("stream stalled");
+  // The previous track is still current, playing, and its position tracking is
+  // restarted from the saved position — the aborted skip is fully undone.
+  expect(player.status).toBe(STATUS.PLAYING);
+  expect(player.getCurrent()?.url).toBe("a");
+  expect(startTracking).toHaveBeenCalledWith(7);
+});
+
 test("forward: finishes the queue when nothing follows and autoplay is off", async () => {
   settings.autoplay = false;
   settings.secondsToWaitAfterQueueEmpties = 0;
