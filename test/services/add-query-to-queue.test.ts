@@ -19,7 +19,9 @@ mock.module("../../src/utils/get-guild-settings.js", () => ({
 const { default: AddQueryToQueue } = await import(
   "../../src/services/add-query-to-queue.js"
 );
-const { MediaSource, STATUS } = await import("../../src/services/player.js");
+const { MediaSource, NoNextTrackError, STATUS } = await import(
+  "../../src/services/player.js"
+);
 
 const song = (overrides: Record<string, unknown> = {}) => ({
   source: MediaSource.Youtube,
@@ -176,7 +178,7 @@ test("surfaces the real error when the skipped-to track fails to play", async ()
 test("reports a friendly error when the skip target vanished", async () => {
   const player = fakePlayer({
     forward: async () => {
-      throw new Error("No songs in queue to forward to.");
+      throw new NoNextTrackError();
     },
   });
   const cmd = make({ getSongs: async () => [[song()], ""], player });
@@ -258,6 +260,33 @@ test("front insertion keeps a multi-song batch in requested order", async () => 
   });
   // Inserted back-to-front so a real player's front insert yields s1, s2.
   expect(added).toEqual(["s2", "s1"]);
+});
+
+test("front insertion keeps a playlist batch in original order", async () => {
+  const added: string[] = [];
+  const player = fakePlayer({
+    voiceConnection: {},
+    add: mock((s: { url: string }) => {
+      added.push(s.url);
+    }),
+  });
+  const playlist = { title: "p", source: "s" };
+  const cmd = make({
+    getSongs: async () => [
+      [song({ url: "p1", playlist }), song({ url: "p2", playlist })],
+      "",
+    ],
+    player,
+  });
+  const { interaction: i } = interaction();
+  await cmd.addToQueue({
+    ...baseArgs,
+    addToFrontOfQueue: true,
+    interaction: i,
+  });
+  // Playlist songs always append, so the front-insert reversal is skipped and
+  // the batch keeps its original order.
+  expect(added).toEqual(["p1", "p2"]);
 });
 
 test("front insertion reports the front-of-queue qualifier for multiple songs", async () => {

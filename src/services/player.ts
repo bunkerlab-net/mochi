@@ -69,6 +69,16 @@ export enum STATUS {
   IDLE,
 }
 
+// Thrown by forward()/manualForward() when the queue has no track to advance
+// to. A dedicated type lets callers detect this case without matching on the
+// message string.
+export class NoNextTrackError extends Error {
+  constructor() {
+    super("No songs in queue to forward to.");
+    this.name = "NoNextTrackError";
+  }
+}
+
 export interface PlayerEvents {
   statusChange: (oldStatus: STATUS, newStatus: STATUS) => void;
 }
@@ -519,7 +529,7 @@ export default class {
       );
       this.save();
     } else {
-      throw new Error("No songs in queue to forward to.");
+      throw new NoNextTrackError();
     }
   }
 

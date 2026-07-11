@@ -17,13 +17,21 @@ let mediaSource = {
   headers: { "User-Agent": "ua" },
   isLive: false,
 };
+let mediaSourceError: Error | null = null;
 let entersStateImpl: () => Promise<void> = async () => {};
 
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => settings,
 }));
 mock.module("../../src/utils/yt-dlp.js", () => ({
-  getYouTubeMediaSource: async () => mediaSource,
+  getYouTubeMediaSource: async () => {
+    // Let a test force a stream-resolution failure to exercise the real
+    // play()/startFreshStream recovery path.
+    if (mediaSourceError) {
+      throw mediaSourceError;
+    }
+    return mediaSource;
+  },
   getSoundCloudMediaSource: async () => mediaSource,
 }));
 
@@ -206,6 +214,7 @@ afterEach(() => {
   // Restore the autoplay stub so a mutation can't leak to later tests, even if
   // an assertion above throws before an inline reset runs.
   autoplay.getRelatedSongs = async () => [];
+  mediaSourceError = null;
   active = undefined;
 });
 
@@ -566,18 +575,20 @@ test("forward: starts a fresh stream when the next entry shares a URL", async ()
   expect(lastInlineVolume).toBeDefined();
 });
 
-test("forward: rolls back the position when play fails from an idle loaded player", async () => {
+test("forward: rolls back the position when the next track fails to start", async () => {
   const player = makePlayer();
   player.add(song({ url: "a" }));
   player.add(song({ url: "b" }));
   player.voiceConnection = makeVoiceConnection() as never;
   player.status = STATUS.IDLE;
-  player.play = async () => {
-    throw new Error("cannot start");
-  };
-  await expect(player.forward(1)).rejects.toThrow("cannot start");
-  // The queue wasn't finalized, so the position returns to the pre-skip track.
+  // Fail at stream resolution so the real play()/startFreshStream path runs.
+  mediaSourceError = new Error("stream unavailable");
+  await expect(player.forward(1)).rejects.toThrow("stream unavailable");
+  mediaSourceError = null;
+  // previousStatus was IDLE (no non-IDLE->IDLE transition), so the failed skip
+  // is rolled back to the pre-skip track rather than left finalized.
   expect(player.getCurrent()?.url).toBe("a");
+  expect(player.status).toBe(STATUS.IDLE);
 });
 
 test("forward: restores playing state when a skip fails without finalizing", async () => {
@@ -588,7 +599,11 @@ test("forward: restores playing state when a skip fails without finalizing", asy
   await player.play();
   player.positionInSeconds = 7;
   // Observe only the restore path, not the initial play's tracking.
-  const startTracking = mock((_position?: number) => {});
+  const startTracking = mock((position?: number) => {
+    if (position !== undefined) {
+      player.positionInSeconds = position;
+    }
+  });
   player.startTrackingPosition = startTracking;
   player.play = async () => {
     throw new Error("stream stalled");
@@ -599,6 +614,7 @@ test("forward: restores playing state when a skip fails without finalizing", asy
   expect(player.status).toBe(STATUS.PLAYING);
   expect(player.getCurrent()?.url).toBe("a");
   expect(startTracking).toHaveBeenCalledWith(7);
+  expect(player.positionInSeconds).toBe(7);
 });
 
 test("forward: finishes the queue when nothing follows and autoplay is off", async () => {

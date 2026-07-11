@@ -23,6 +23,7 @@ import type KeyValueCacheProvider from "./key-value-cache.js";
 import type Player from "./player.js";
 import {
   MediaSource,
+  NoNextTrackError,
   type QueuedSong,
   type SongMetadata,
   STATUS,
@@ -136,16 +137,12 @@ export default class AddQueryToQueue {
     try {
       await player.forward(1);
     } catch (error: unknown) {
-      // manualForward throws this exact message when there is genuinely no next
-      // track (e.g. the queued target was cleared during the awaited
-      // connectAndPlay). Log it and convert only that case to the friendly
-      // reply; any other failure is a real playback error (e.g. an unavailable
-      // track), so rethrow it unchanged (logged upstream) so its reason reaches
-      // the user.
-      if (
-        error instanceof Error &&
-        error.message === "No songs in queue to forward to."
-      ) {
+      // forward() throws NoNextTrackError when there is genuinely no next track
+      // (e.g. the queued target was cleared during the awaited connectAndPlay).
+      // Log it and convert only that case to the friendly reply; any other
+      // failure is a real playback error (e.g. an unavailable track), so
+      // rethrow it unchanged (logged upstream) so its reason reaches the user.
+      if (error instanceof NoNextTrackError) {
         logger.warn("queue", "nothing to skip to", error);
         throw new Error("no song to skip to");
       }
