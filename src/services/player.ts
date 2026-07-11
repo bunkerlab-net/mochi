@@ -22,6 +22,7 @@ import { WriteStream } from "fs-capacitor";
 import { hashSync } from "hasha";
 import type { PlayerState, Setting } from "../db/schema.js";
 import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
+import { NoNextTrackError } from "../utils/errors.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import logger from "../utils/logger.js";
 import {
@@ -67,16 +68,6 @@ export enum STATUS {
   PLAYING,
   PAUSED,
   IDLE,
-}
-
-// Thrown by forward()/manualForward() when the queue has no track to advance
-// to. A dedicated type lets callers detect this case without matching on the
-// message string.
-export class NoNextTrackError extends Error {
-  constructor() {
-    super("No songs in queue to forward to.");
-    this.name = "NoNextTrackError";
-  }
 }
 
 export interface PlayerEvents {

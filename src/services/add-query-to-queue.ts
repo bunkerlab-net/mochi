@@ -15,6 +15,7 @@ import {
   getMostPopularVoiceChannel,
 } from "../utils/channels.js";
 import { ONE_HOUR_IN_SECONDS } from "../utils/constants.js";
+import { NoNextTrackError } from "../utils/errors.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import { getGuild, getGuildId, getMemberUserId } from "../utils/interaction.js";
 import logger from "../utils/logger.js";
@@ -23,7 +24,6 @@ import type KeyValueCacheProvider from "./key-value-cache.js";
 import type Player from "./player.js";
 import {
   MediaSource,
-  NoNextTrackError,
   type QueuedSong,
   type SongMetadata,
   STATUS,

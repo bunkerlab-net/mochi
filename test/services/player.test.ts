@@ -617,6 +617,24 @@ test("forward: restores playing state when a skip fails without finalizing", asy
   expect(player.positionInSeconds).toBe(7);
 });
 
+test("forward: keeps the finalized end state when the last track is unplayable", async () => {
+  settings.secondsToWaitAfterQueueEmpties = 0;
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  // Skipping to the last track, which fails to stream: play()'s own recovery
+  // finalizes the queue (PLAYING -> IDLE).
+  mediaSourceError = new Error("stream unavailable");
+  await expect(player.forward(1)).rejects.toThrow("stream unavailable");
+  mediaSourceError = null;
+  // The transition to IDLE means the queue was finalized, so the end state is
+  // kept rather than rolled back to "a".
+  expect(player.status).toBe(STATUS.IDLE);
+  expect(player.getCurrent()?.url).toBe("b");
+});
+
 test("forward: finishes the queue when nothing follows and autoplay is off", async () => {
   settings.autoplay = false;
   settings.secondsToWaitAfterQueueEmpties = 0;

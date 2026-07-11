@@ -4,6 +4,7 @@ import {
   type ChatInputCommandInteraction,
   Collection,
 } from "discord.js";
+import { NoNextTrackError } from "../../src/utils/errors.js";
 
 // add-query imports get-guild-settings (→ player → DI); mock it to keep
 // inversify out of the graph. build-embed is intentionally NOT mocked: it is a
@@ -19,9 +20,7 @@ mock.module("../../src/utils/get-guild-settings.js", () => ({
 const { default: AddQueryToQueue } = await import(
   "../../src/services/add-query-to-queue.js"
 );
-const { MediaSource, NoNextTrackError, STATUS } = await import(
-  "../../src/services/player.js"
-);
+const { MediaSource, STATUS } = await import("../../src/services/player.js");
 
 const song = (overrides: Record<string, unknown> = {}) => ({
   source: MediaSource.Youtube,
@@ -240,14 +239,29 @@ test("does not skip when the current track changed during song resolution", asyn
   expect(String(replies.at(-1))).not.toContain("skipped");
 });
 
-test("front insertion keeps a multi-song batch in requested order", async () => {
-  const added: string[] = [];
+// A fake player whose add() models real front-insertion vs append semantics so
+// tests can assert the resulting queue order, not raw add-call order.
+const statefulQueuePlayer = () => {
+  const queue = ["current"];
   const player = fakePlayer({
     voiceConnection: {},
-    add: mock((s: { url: string }) => {
-      added.push(s.url);
-    }),
+    getCurrent: () => ({ ...song(), url: queue[0] }),
+    add: (
+      s: { url: string; playlist?: unknown },
+      opts?: { immediate?: boolean },
+    ) => {
+      if (s.playlist || !opts?.immediate) {
+        queue.push(s.url);
+      } else {
+        queue.splice(1, 0, s.url);
+      }
+    },
   });
+  return { player, queue };
+};
+
+test("front insertion inserts a multi-song batch after the current track in order", async () => {
+  const { player, queue } = statefulQueuePlayer();
   const cmd = make({
     getSongs: async () => [[song({ url: "s1" }), song({ url: "s2" })], ""],
     player,
@@ -258,18 +272,11 @@ test("front insertion keeps a multi-song batch in requested order", async () => 
     addToFrontOfQueue: true,
     interaction: i,
   });
-  // Inserted back-to-front so a real player's front insert yields s1, s2.
-  expect(added).toEqual(["s2", "s1"]);
+  expect(queue).toEqual(["current", "s1", "s2"]);
 });
 
-test("front insertion keeps a playlist batch in original order", async () => {
-  const added: string[] = [];
-  const player = fakePlayer({
-    voiceConnection: {},
-    add: mock((s: { url: string }) => {
-      added.push(s.url);
-    }),
-  });
+test("front insertion appends a playlist batch in original order", async () => {
+  const { player, queue } = statefulQueuePlayer();
   const playlist = { title: "p", source: "s" };
   const cmd = make({
     getSongs: async () => [
@@ -284,9 +291,8 @@ test("front insertion keeps a playlist batch in original order", async () => {
     addToFrontOfQueue: true,
     interaction: i,
   });
-  // Playlist songs always append, so the front-insert reversal is skipped and
-  // the batch keeps its original order.
-  expect(added).toEqual(["p1", "p2"]);
+  // Playlist songs always append (add ignores immediate for them).
+  expect(queue).toEqual(["current", "p1", "p2"]);
 });
 
 test("front insertion reports the front-of-queue qualifier for multiple songs", async () => {
