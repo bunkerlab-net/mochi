@@ -3,18 +3,22 @@ updates:
   - package-ecosystem: bun
     directory: /
     schedule:
-      interval: daily
-      time: 10:00
+      interval: weekly
+      time: "10:00"
     open-pull-requests-limit: 10
     ignore:
       # Keep @types/node pinned to the runtime major; only allow minor/patch.
       - dependency-name: "@types/node"
         update-types:
           - "version-update:semver-major"
+    cooldown:
+      default-days: 1
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: daily
-      time: 10:00
+      interval: weekly
+      time: "10:00"
     open-pull-requests-limit: 10
+    cooldown:
+      default-days: 1
