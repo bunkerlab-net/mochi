@@ -103,11 +103,9 @@ export default class AddQueryToQueue {
       currentBeforeEnqueue !== null &&
       player.getCurrent() === currentBeforeEnqueue;
     if (didSkipCurrentTrack) {
-      try {
-        await player.forward(1);
-      } catch {
-        throw new Error("no song to skip to");
-      }
+      // Surface the real failure (e.g. an unavailable track) instead of masking
+      // every forward() error as a misleading "no song to skip to".
+      await player.forward(1);
     }
 
     await this.buildQueueReply(

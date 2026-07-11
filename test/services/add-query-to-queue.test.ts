@@ -160,17 +160,17 @@ test("skips the current track when requested", async () => {
   expect(player.forward).toHaveBeenCalledWith(1);
 });
 
-test("throws a friendly error when there is nothing to skip to", async () => {
+test("surfaces the real error when the skipped-to track fails to play", async () => {
   const player = fakePlayer({
     forward: async () => {
-      throw new Error("end");
+      throw new Error("yt-dlp failed to extract media: video unavailable");
     },
   });
   const cmd = make({ getSongs: async () => [[song()], ""], player });
   const { interaction: i } = interaction();
-  expect(
+  await expect(
     cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i }),
-  ).rejects.toThrow("no song to skip to");
+  ).rejects.toThrow("yt-dlp failed to extract media");
 });
 
 test("reports the skip in the reply when a track was playing", async () => {
