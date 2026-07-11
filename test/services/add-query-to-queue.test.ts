@@ -173,6 +173,19 @@ test("surfaces the real error when the skipped-to track fails to play", async ()
   ).rejects.toThrow("yt-dlp failed to extract media");
 });
 
+test("reports a friendly error when the skip target vanished", async () => {
+  const player = fakePlayer({
+    forward: async () => {
+      throw new Error("No songs in queue to forward to.");
+    },
+  });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i } = interaction();
+  await expect(
+    cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i }),
+  ).rejects.toThrow("no song to skip to");
+});
+
 test("reports the skip in the reply when a track was playing", async () => {
   const player = fakePlayer();
   const cmd = make({ getSongs: async () => [[song()], ""], player });

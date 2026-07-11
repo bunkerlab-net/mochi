@@ -93,20 +93,11 @@ export default class AddQueryToQueue {
       initialExtraMsg,
     );
 
-    // Skip only when the track that was playing when we enqueued is still the
-    // current one. On an idle/empty queue the new song becomes current and
-    // connectAndPlay starts it (nothing to skip); if the previous track ended
-    // while we resolved songs, identity differs so we don't skip past the
-    // request. forward() resumes playback, so it plays even if we were paused.
-    const didSkipCurrentTrack =
-      skipCurrentTrack &&
-      currentBeforeEnqueue !== null &&
-      player.getCurrent() === currentBeforeEnqueue;
-    if (didSkipCurrentTrack) {
-      // Surface the real failure (e.g. an unavailable track) instead of masking
-      // every forward() error as a misleading "no song to skip to".
-      await player.forward(1);
-    }
+    const didSkipCurrentTrack = await this.maybeSkipCurrentTrack({
+      player,
+      skipCurrentTrack,
+      currentBeforeEnqueue,
+    });
 
     await this.buildQueueReply(
       interaction,
@@ -116,6 +107,53 @@ export default class AddQueryToQueue {
       didSkipCurrentTrack,
       extraMsg,
     );
+  }
+
+  // Skips the freshly-enqueued front track into playback when a track was
+  // already playing; returns whether it skipped.
+  private async maybeSkipCurrentTrack({
+    player,
+    skipCurrentTrack,
+    currentBeforeEnqueue,
+  }: {
+    player: Player;
+    skipCurrentTrack: boolean;
+    currentBeforeEnqueue: QueuedSong | null;
+  }): Promise<boolean> {
+    // Skip only when the track that was playing when we enqueued is still the
+    // current one. On an idle/empty queue the new song becomes current and
+    // connectAndPlay starts it (nothing to skip); if the previous track ended
+    // while we resolved songs, identity differs so we don't skip past the
+    // request. forward() resumes playback, so it plays even if we were paused.
+    const shouldSkip =
+      skipCurrentTrack &&
+      currentBeforeEnqueue !== null &&
+      player.getCurrent() === currentBeforeEnqueue;
+    if (!shouldSkip) {
+      return false;
+    }
+
+    try {
+      await player.forward(1);
+    } catch (error: unknown) {
+      // manualForward throws this exact message when there is genuinely no next
+      // track (e.g. the queued target was cleared during the awaited
+      // connectAndPlay). Log it and convert only that case to the friendly
+      // reply; any other failure is a real playback error (e.g. an unavailable
+      // track), so rethrow it unchanged (logged upstream) so its reason reaches
+      // the user.
+      if (
+        error instanceof Error &&
+        error.message === "No songs in queue to forward to."
+      ) {
+        logger.warn("queue", "nothing to skip to", error);
+        throw new Error("no song to skip to");
+      }
+
+      throw error;
+    }
+
+    return true;
   }
 
   private async prepareAndEnqueueSongs({
