@@ -38,26 +38,54 @@ export default class implements Command {
     this.cache = cache;
     this.addQueryToQueue = addQueryToQueue;
 
-    const queryDescription =
-      thirdParty === undefined
-        ? "YouTube URL or search query"
-        : "YouTube URL, Spotify URL, or search query";
+    this.slashCommand = this.buildSlashCommand({
+      name: "play",
+      description: "play a song",
+      includeImmediateAndSkip: true,
+    });
+  }
 
-    this.slashCommand = new SlashCommandBuilder()
-      .setName("play")
-      .setDescription("play a song")
+  // Query-option help text reflecting whether Spotify lookups are available.
+  // Shared with subclasses (e.g. /playnow) so the described capabilities can't
+  // drift from what's actually configured.
+  protected queryDescription(): string {
+    return this.spotify
+      ? "YouTube URL, Spotify URL, or search query"
+      : "YouTube URL or search query";
+  }
+
+  // Builds the /play-family slash command. /play includes the `immediate` and
+  // `skip` toggles; variants like /playnow force those and omit them. Options
+  // are added in a fixed order so each command keeps its public option layout.
+  protected buildSlashCommand({
+    name,
+    description,
+    includeImmediateAndSkip,
+  }: {
+    name: string;
+    description: string;
+    includeImmediateAndSkip: boolean;
+  }): SharedSlashCommand {
+    const builder = new SlashCommandBuilder()
+      .setName(name)
+      .setDescription(description)
       .addStringOption((option) =>
         option
           .setName("query")
-          .setDescription(queryDescription)
+          .setDescription(this.queryDescription())
           .setAutocomplete(true)
           .setRequired(true),
-      )
-      .addBooleanOption((option) =>
+      );
+
+    if (includeImmediateAndSkip) {
+      builder.addBooleanOption((option) =>
         option
           .setName("immediate")
           .setDescription("add track to the front of the queue"),
-      )
+      );
+    }
+
+    builder
       .addBooleanOption((option) =>
         option
           .setName("shuffle")
@@ -67,26 +95,48 @@ export default class implements Command {
         option
           .setName("split")
           .setDescription("if a track has chapters, split it"),
-      )
-      .addBooleanOption((option) =>
+      );
+
+    if (includeImmediateAndSkip) {
+      builder.addBooleanOption((option) =>
         option
           .setName("skip")
           .setDescription("skip the currently playing track"),
       );
+    }
+
+    return builder;
   }
 
   public async execute(
     interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
+    await this.enqueueQuery(interaction, {
+      addToFrontOfQueue: interaction.options.getBoolean("immediate") ?? false,
+      skipCurrentTrack: interaction.options.getBoolean("skip") ?? false,
+    });
+  }
+
+  // Shared enqueue path for /play and its variants (e.g. /playnow). Reads the
+  // query and the shuffle/split options here so subclasses can't drift from
+  // that handling; the front-of-queue and skip flags are supplied by the
+  // caller.
+  protected async enqueueQuery(
+    interaction: ChatInputCommandInteraction,
+    {
+      addToFrontOfQueue,
+      skipCurrentTrack,
+    }: { addToFrontOfQueue: boolean; skipCurrentTrack: boolean },
   ): Promise<void> {
     const query = interaction.options.getString("query", true);
 
     await this.addQueryToQueue.addToQueue({
       interaction,
       query: query.trim(),
-      addToFrontOfQueue: interaction.options.getBoolean("immediate") ?? false,
+      addToFrontOfQueue,
       shuffleAdditions: interaction.options.getBoolean("shuffle") ?? false,
       shouldSplitChapters: interaction.options.getBoolean("split") ?? false,
-      skipCurrentTrack: interaction.options.getBoolean("skip") ?? false,
+      skipCurrentTrack,
     });
   }
 

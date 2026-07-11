@@ -17,13 +17,21 @@ let mediaSource = {
   headers: { "User-Agent": "ua" },
   isLive: false,
 };
+let mediaSourceError: Error | null = null;
 let entersStateImpl: () => Promise<void> = async () => {};
 
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => settings,
 }));
 mock.module("../../src/utils/yt-dlp.js", () => ({
-  getYouTubeMediaSource: async () => mediaSource,
+  getYouTubeMediaSource: async () => {
+    // Let a test force a stream-resolution failure to exercise the real
+    // play()/startFreshStream recovery path.
+    if (mediaSourceError) {
+      throw mediaSourceError;
+    }
+    return mediaSource;
+  },
   getSoundCloudMediaSource: async () => mediaSource,
 }));
 
@@ -203,6 +211,10 @@ afterEach(() => {
   if (timer) {
     clearTimeout(timer);
   }
+  // Restore the autoplay stub so a mutation can't leak to later tests, even if
+  // an assertion above throws before an inline reset runs.
+  autoplay.getRelatedSongs = async () => [];
+  mediaSourceError = null;
   active = undefined;
 });
 
@@ -534,6 +546,95 @@ test("forward: advances to the next song", async () => {
   expect(player.getCurrent()?.url).toBe("b");
 });
 
+test("forward: resumes playback when skipping from a paused player", async () => {
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.pause();
+  expect(player.status).toBe(STATUS.PAUSED);
+  await player.forward(1);
+  expect(player.getCurrent()?.url).toBe("b");
+  expect(player.status).toBe(STATUS.PLAYING);
+});
+
+test("forward: starts a fresh stream when the next entry shares a URL", async () => {
+  const player = makePlayer();
+  // Two chapters of one video: same url, different offsets.
+  player.add(song({ url: "vid", title: "ch1", offset: 0 }));
+  player.add(song({ url: "vid", title: "ch2", offset: 100 }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.pause();
+  lastInlineVolume = undefined;
+  await player.forward(1);
+  expect(player.getCurrent()?.title).toBe("ch2");
+  expect(player.status).toBe(STATUS.PLAYING);
+  // A fresh stream (not an unpause of ch1) must have been created for ch2.
+  expect(lastInlineVolume).toBeDefined();
+});
+
+test("forward: rolls back the position when the next track fails to start", async () => {
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  player.status = STATUS.IDLE;
+  // Fail at stream resolution so the real play()/startFreshStream path runs.
+  mediaSourceError = new Error("stream unavailable");
+  await expect(player.forward(1)).rejects.toThrow("stream unavailable");
+  mediaSourceError = null;
+  // previousStatus was IDLE (no non-IDLE->IDLE transition), so the failed skip
+  // is rolled back to the pre-skip track rather than left finalized.
+  expect(player.getCurrent()?.url).toBe("a");
+  expect(player.status).toBe(STATUS.IDLE);
+});
+
+test("forward: restores playing state when a skip fails without finalizing", async () => {
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.positionInSeconds = 7;
+  // Observe only the restore path, not the initial play's tracking.
+  const startTracking = mock((position?: number) => {
+    if (position !== undefined) {
+      player.positionInSeconds = position;
+    }
+  });
+  player.startTrackingPosition = startTracking;
+  player.play = async () => {
+    throw new Error("stream stalled");
+  };
+  await expect(player.forward(1)).rejects.toThrow("stream stalled");
+  // The previous track is still current, playing, and its position tracking is
+  // restarted from the saved position — the aborted skip is fully undone.
+  expect(player.status).toBe(STATUS.PLAYING);
+  expect(player.getCurrent()?.url).toBe("a");
+  expect(startTracking).toHaveBeenCalledWith(7);
+  expect(player.positionInSeconds).toBe(7);
+});
+
+test("forward: keeps the finalized end state when the last track is unplayable", async () => {
+  settings.secondsToWaitAfterQueueEmpties = 0;
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  // Skipping to the last track, which fails to stream: play()'s own recovery
+  // finalizes the queue (PLAYING -> IDLE).
+  mediaSourceError = new Error("stream unavailable");
+  await expect(player.forward(1)).rejects.toThrow("stream unavailable");
+  mediaSourceError = null;
+  // The transition to IDLE means the queue was finalized, so the end state is
+  // kept rather than rolled back to "a".
+  expect(player.status).toBe(STATUS.IDLE);
+  expect(player.getCurrent()?.url).toBe("b");
+});
+
 test("forward: finishes the queue when nothing follows and autoplay is off", async () => {
   settings.autoplay = false;
   settings.secondsToWaitAfterQueueEmpties = 0;
@@ -570,6 +671,19 @@ test("tryAutoplay: refills the queue with related songs", async () => {
   await player.forward(1);
   autoplay.getRelatedSongs = async () => [];
   expect(player.getCurrent()?.url).toBe("related");
+});
+
+test("forward: plays an autoplay pick when skipping past the queue end while paused", async () => {
+  autoplay.getRelatedSongs = async () => [song({ url: "related" })];
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.pause();
+  await player.forward(1);
+  autoplay.getRelatedSongs = async () => [];
+  expect(player.getCurrent()?.url).toBe("related");
+  expect(player.status).toBe(STATUS.PLAYING);
 });
 
 test("tryAutoplay: returns false when disabled", async () => {

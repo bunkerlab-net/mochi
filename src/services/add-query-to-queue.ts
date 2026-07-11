@@ -15,13 +15,19 @@ import {
   getMostPopularVoiceChannel,
 } from "../utils/channels.js";
 import { ONE_HOUR_IN_SECONDS } from "../utils/constants.js";
+import { NoNextTrackError } from "../utils/errors.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import { getGuild, getGuildId, getMemberUserId } from "../utils/interaction.js";
 import logger from "../utils/logger.js";
 import type Config from "./config.js";
 import type KeyValueCacheProvider from "./key-value-cache.js";
 import type Player from "./player.js";
-import { MediaSource, type SongMetadata, STATUS } from "./player.js";
+import {
+  MediaSource,
+  type QueuedSong,
+  type SongMetadata,
+  STATUS,
+} from "./player.js";
 
 @injectable()
 export default class AddQueryToQueue {
@@ -61,7 +67,6 @@ export default class AddQueryToQueue {
   }): Promise<void> {
     const guildId = getGuildId(interaction);
     const player = this.playerManager.get(guildId);
-    const wasPlayingSong = player.getCurrent() !== null;
 
     const [targetVoiceChannel] =
       getMemberVoiceChannel(interaction.member as GuildMember) ??
@@ -70,6 +75,7 @@ export default class AddQueryToQueue {
     const {
       newSongs,
       firstSong,
+      currentBeforeEnqueue,
       extraMsg: initialExtraMsg,
     } = await this.prepareAndEnqueueSongs({
       query,
@@ -84,26 +90,67 @@ export default class AddQueryToQueue {
       player,
       targetVoiceChannel,
       interaction,
-      wasPlayingSong,
+      currentBeforeEnqueue !== null,
       initialExtraMsg,
     );
 
-    if (skipCurrentTrack) {
-      try {
-        await player.forward(1);
-      } catch (_: unknown) {
-        throw new Error("no song to skip to");
-      }
-    }
+    const didSkipCurrentTrack = await this.maybeSkipCurrentTrack({
+      player,
+      skipCurrentTrack,
+      currentBeforeEnqueue,
+    });
 
     await this.buildQueueReply(
       interaction,
       newSongs,
       firstSong,
       addToFrontOfQueue,
-      skipCurrentTrack,
+      didSkipCurrentTrack,
       extraMsg,
     );
+  }
+
+  // Skips the freshly-enqueued front track into playback when a track was
+  // already playing; returns whether it skipped.
+  private async maybeSkipCurrentTrack({
+    player,
+    skipCurrentTrack,
+    currentBeforeEnqueue,
+  }: {
+    player: Player;
+    skipCurrentTrack: boolean;
+    currentBeforeEnqueue: QueuedSong | null;
+  }): Promise<boolean> {
+    // Skip only when the track that was playing when we enqueued is still the
+    // current one. On an idle/empty queue the new song becomes current and
+    // connectAndPlay starts it (nothing to skip); if the previous track ended
+    // while we resolved songs, identity differs so we don't skip past the
+    // request. forward() resumes playback, so it plays even if we were paused.
+    const shouldSkip =
+      skipCurrentTrack &&
+      currentBeforeEnqueue !== null &&
+      player.getCurrent() === currentBeforeEnqueue;
+    if (!shouldSkip) {
+      return false;
+    }
+
+    try {
+      await player.forward(1);
+    } catch (error: unknown) {
+      // forward() throws NoNextTrackError when there is genuinely no next track
+      // (e.g. the queued target was cleared during the awaited connectAndPlay).
+      // Log it and convert only that case to the friendly reply; any other
+      // failure is a real playback error (e.g. an unavailable track), so
+      // rethrow it unchanged (logged upstream) so its reason reaches the user.
+      if (error instanceof NoNextTrackError) {
+        logger.warn("queue", "nothing to skip to", error);
+        throw new Error("no song to skip to");
+      }
+
+      throw error;
+    }
+
+    return true;
   }
 
   private async prepareAndEnqueueSongs({
@@ -123,6 +170,7 @@ export default class AddQueryToQueue {
   }): Promise<{
     newSongs: SongMetadata[];
     firstSong: SongMetadata;
+    currentBeforeEnqueue: QueuedSong | null;
     extraMsg: string;
   }> {
     const guildId = getGuildId(interaction);
@@ -153,16 +201,12 @@ export default class AddQueryToQueue {
       );
     }
 
-    newSongs.forEach((song) => {
-      player.add(
-        {
-          ...song,
-          addedInChannelId: interaction.channelId,
-          requestedBy: getMemberUserId(interaction),
-        },
-        { immediate: addToFrontOfQueue ?? false },
-      );
-    });
+    // Capture the current track right before enqueueing so the skip decision
+    // uses identity: if the previous track ends (or the queue advances) while
+    // we resolve songs, getCurrent() differs and we won't skip the request.
+    const currentBeforeEnqueue = player.getCurrent();
+
+    this.addSongsToQueue({ newSongs, addToFrontOfQueue, player, interaction });
 
     logger.info(
       "queue",
@@ -174,7 +218,39 @@ export default class AddQueryToQueue {
       throw new Error("no songs found");
     }
 
-    return { newSongs, firstSong, extraMsg };
+    return { newSongs, firstSong, currentBeforeEnqueue, extraMsg };
+  }
+
+  private addSongsToQueue({
+    newSongs,
+    addToFrontOfQueue,
+    player,
+    interaction,
+  }: {
+    newSongs: SongMetadata[];
+    addToFrontOfQueue: boolean;
+    player: Player;
+    interaction: ChatInputCommandInteraction;
+  }): void {
+    // player.add({ immediate }) inserts each song right after the current one,
+    // so adding a multi-song batch front-first would reverse it. Enqueue in
+    // reverse for front insertion to keep the queue in newSongs order. Playlist
+    // songs always append (add ignores immediate for them), so skip reversal.
+    const enqueueOrder =
+      addToFrontOfQueue && !newSongs.some((song) => song.playlist)
+        ? [...newSongs].reverse()
+        : newSongs;
+
+    enqueueOrder.forEach((song) => {
+      player.add(
+        {
+          ...song,
+          addedInChannelId: interaction.channelId,
+          requestedBy: getMemberUserId(interaction),
+        },
+        { immediate: addToFrontOfQueue },
+      );
+    });
   }
 
   private async connectAndPlay(
@@ -231,11 +307,11 @@ export default class AddQueryToQueue {
 
     if (newSongs.length === 1) {
       await interaction.editReply(
-        `hai, **${firstSong.title}** added to the${addToFrontOfQueue ? " front of the" : ""} queue${skipCurrentTrack ? "and current track skipped" : ""}${msg}`,
+        `hai, **${firstSong.title}** added to the${addToFrontOfQueue ? " front of the" : ""} queue${skipCurrentTrack ? " and current track skipped" : ""}${msg}`,
       );
     } else {
       await interaction.editReply(
-        `hai, **${firstSong.title}** and ${newSongs.length - 1} other songs were added to the queue${skipCurrentTrack ? "and current track skipped" : ""}${msg}`,
+        `hai, **${firstSong.title}** and ${newSongs.length - 1} other songs were added to the${addToFrontOfQueue ? " front of the" : ""} queue${skipCurrentTrack ? " and current track skipped" : ""}${msg}`,
       );
     }
   }

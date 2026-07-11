@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add a `/playnow` command that jumps a song to the front of the queue and starts it immediately, skipping the current track. It takes the same query (with autocomplete) and optional `shuffle`/`split` options as `/play`; on an empty or idle queue it simply starts the requested song instead of skipping past it.
+- Skipping while paused now continues playback: `/skip`, `/next`, and `/playnow` start the next track (or an autoplay pick at the end of the queue) even when the player was paused, instead of stopping.
+
 ## [3.2.2] - 2026-06-20
 
 - Redesign `/config`: the ten separate `/config set-*` subcommands are replaced by a single `/config set <key> <value>`, and `/config get <key>` now shows one setting's current value, accepted input, and how to change it (omit the key to list everything). Settings are picked from a dropdown of keys, and `set` accepts friendly values such as `true`/`false`/`yes`/`no` for toggles with clear validation errors. All `/config` replies are now private (ephemeral), so viewing or changing settings no longer posts to the channel.

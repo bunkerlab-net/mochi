@@ -4,6 +4,7 @@ import {
   type ChatInputCommandInteraction,
   Collection,
 } from "discord.js";
+import { NoNextTrackError } from "../../src/utils/errors.js";
 
 // add-query imports get-guild-settings (→ player → DI); mock it to keep
 // inversify out of the graph. build-embed is intentionally NOT mocked: it is a
@@ -34,24 +35,28 @@ const song = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const fakePlayer = (overrides: Record<string, unknown> = {}) => ({
-  // A full current song so the real buildPlayingMessageEmbed (called from
-  // connectAndPlay) has something to render.
-  getCurrent: () => song(),
-  getQueue: () => [],
-  queueSize: () => 0,
-  getPosition: () => 0,
-  getVolume: () => 100,
-  loopCurrentSong: false,
-  loopCurrentQueue: false,
-  voiceConnection: null,
-  status: STATUS.PLAYING,
-  connect: mock(async () => {}),
-  play: mock(async () => {}),
-  forward: mock(async () => {}),
-  add: mock(() => {}),
-  ...overrides,
-});
+const fakePlayer = (overrides: Record<string, unknown> = {}) => {
+  // A stable current song so the identity-based skip check sees the same object
+  // before and after enqueue, and so the real buildPlayingMessageEmbed (called
+  // from connectAndPlay) has something to render.
+  const current = song();
+  return {
+    getCurrent: () => current,
+    getQueue: () => [],
+    queueSize: () => 0,
+    getPosition: () => 0,
+    getVolume: () => 100,
+    loopCurrentSong: false,
+    loopCurrentQueue: false,
+    voiceConnection: null,
+    status: STATUS.PLAYING,
+    connect: mock(async () => {}),
+    play: mock(async () => {}),
+    forward: mock(async () => {}),
+    add: mock(() => {}),
+    ...overrides,
+  };
+};
 
 const make = (opts: {
   getSongs: () => Promise<unknown>;
@@ -156,17 +161,154 @@ test("skips the current track when requested", async () => {
   expect(player.forward).toHaveBeenCalledWith(1);
 });
 
-test("throws a friendly error when there is nothing to skip to", async () => {
+test("surfaces the real error when the skipped-to track fails to play", async () => {
   const player = fakePlayer({
     forward: async () => {
-      throw new Error("end");
+      throw new Error("yt-dlp failed to extract media: video unavailable");
     },
   });
   const cmd = make({ getSongs: async () => [[song()], ""], player });
   const { interaction: i } = interaction();
-  expect(
+  await expect(
+    cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i }),
+  ).rejects.toThrow("yt-dlp failed to extract media");
+});
+
+test("reports a friendly error when the skip target vanished", async () => {
+  const player = fakePlayer({
+    forward: async () => {
+      throw new NoNextTrackError();
+    },
+  });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i } = interaction();
+  await expect(
     cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i }),
   ).rejects.toThrow("no song to skip to");
+});
+
+test("reports the skip in the reply when a track was playing", async () => {
+  const player = fakePlayer();
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
+  expect(String(replies.at(-1))).toContain(" and current track skipped");
+  expect(player.forward).toHaveBeenCalledWith(1);
+});
+
+test("does not skip when nothing was playing before enqueue", async () => {
+  const player = fakePlayer({
+    getCurrent: () => null,
+    voiceConnection: {},
+    status: STATUS.IDLE,
+  });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
+  expect(player.forward).not.toHaveBeenCalled();
+  expect(String(replies.at(-1))).not.toContain("skipped");
+});
+
+test("skips to the requested track when the current one is loaded but idle", async () => {
+  const player = fakePlayer({ voiceConnection: {}, status: STATUS.IDLE });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
+  expect(player.forward).toHaveBeenCalledWith(1);
+  expect(String(replies.at(-1))).toContain(" and current track skipped");
+});
+
+test("does not skip when the current track changed during song resolution", async () => {
+  const songA = song({ url: "a" });
+  const songB = song({ url: "b" });
+  let calls = 0;
+  const player = fakePlayer({
+    voiceConnection: {},
+    status: STATUS.PLAYING,
+    // Track A when we capture before enqueue, track B at the skip decision:
+    // the previous track ended and the queue advanced while resolving songs.
+    getCurrent: () => {
+      calls += 1;
+      return calls === 1 ? songA : songB;
+    },
+  });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
+  expect(player.forward).not.toHaveBeenCalled();
+  expect(String(replies.at(-1))).not.toContain("skipped");
+});
+
+// A fake player whose add() models real front-insertion vs append semantics so
+// tests can assert the resulting queue order, not raw add-call order.
+const statefulQueuePlayer = () => {
+  const queue = ["current"];
+  const player = fakePlayer({
+    voiceConnection: {},
+    getCurrent: () => ({ ...song(), url: queue[0] }),
+    add: (
+      s: { url: string; playlist?: unknown },
+      opts?: { immediate?: boolean },
+    ) => {
+      if (s.playlist || !opts?.immediate) {
+        queue.push(s.url);
+      } else {
+        queue.splice(1, 0, s.url);
+      }
+    },
+  });
+  return { player, queue };
+};
+
+test("front insertion inserts a multi-song batch after the current track in order", async () => {
+  const { player, queue } = statefulQueuePlayer();
+  const cmd = make({
+    getSongs: async () => [[song({ url: "s1" }), song({ url: "s2" })], ""],
+    player,
+  });
+  const { interaction: i } = interaction();
+  await cmd.addToQueue({
+    ...baseArgs,
+    addToFrontOfQueue: true,
+    interaction: i,
+  });
+  expect(queue).toEqual(["current", "s1", "s2"]);
+});
+
+test("front insertion appends a playlist batch in original order", async () => {
+  const { player, queue } = statefulQueuePlayer();
+  const playlist = { title: "p", source: "s" };
+  const cmd = make({
+    getSongs: async () => [
+      [song({ url: "p1", playlist }), song({ url: "p2", playlist })],
+      "",
+    ],
+    player,
+  });
+  const { interaction: i } = interaction();
+  await cmd.addToQueue({
+    ...baseArgs,
+    addToFrontOfQueue: true,
+    interaction: i,
+  });
+  // Playlist songs always append (add ignores immediate for them).
+  expect(queue).toEqual(["current", "p1", "p2"]);
+});
+
+test("front insertion reports the front-of-queue qualifier for multiple songs", async () => {
+  const player = fakePlayer({ voiceConnection: {} });
+  const cmd = make({
+    getSongs: async () => [[song(), song({ url: "v2" })], ""],
+    player,
+  });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({
+    ...baseArgs,
+    addToFrontOfQueue: true,
+    interaction: i,
+  });
+  expect(String(replies.at(-1))).toContain("other songs");
+  expect(String(replies.at(-1))).toContain("front of the");
 });
 
 test("starts playback when already connected but idle", async () => {

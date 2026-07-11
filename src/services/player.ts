@@ -22,6 +22,7 @@ import { WriteStream } from "fs-capacitor";
 import { hashSync } from "hasha";
 import type { PlayerState, Setting } from "../db/schema.js";
 import { buildPlayingMessageEmbed } from "../utils/build-embed.js";
+import { NoNextTrackError } from "../utils/errors.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import logger from "../utils/logger.js";
 import {
@@ -303,10 +304,7 @@ export default class {
     }
 
     // Resume from paused state
-    if (
-      this.status === STATUS.PAUSED &&
-      currentSong.url === this.nowPlaying?.url
-    ) {
+    if (this.status === STATUS.PAUSED && currentSong === this.nowPlaying) {
       if (this.audioPlayer && !this.pendingVolumeRebuild) {
         this.audioPlayer.unpause();
         this.status = STATUS.PLAYING;
@@ -400,21 +398,42 @@ export default class {
   }
 
   async forward(skip: number): Promise<void> {
+    const previousPosition = this.queuePosition;
+    const previousPositionInSeconds = this.positionInSeconds;
+    const previousStatus = this.status;
     this.manualForward(skip);
 
-    try {
-      if (this.getCurrent() && this.status !== STATUS.PAUSED) {
+    // Advancing to a queued track (or an autoplay refill) always resumes
+    // playback, so /skip and the add-and-skip path start the next song even
+    // from a paused player instead of staying paused.
+    if (this.getCurrent() || (await this.tryAutoplay())) {
+      try {
         await this.play();
-      } else if (this.status !== STATUS.PAUSED && (await this.tryAutoplay())) {
-        // Queue ran out — autoplay refilled it at the current position.
-        await this.play();
-      } else {
-        await this.finishQueue();
+      } catch (error: unknown) {
+        // Starting the new track failed. If play()'s own recovery finalized the
+        // queue during this attempt (a non-IDLE player became IDLE, e.g. an
+        // unplayable last track), keep that end state. Otherwise the previous
+        // track is still current — the connection wasn't ready, so its audio
+        // never stopped — so restore the pre-skip position and playback state.
+        const finalizedDuringAttempt =
+          previousStatus !== STATUS.IDLE && this.status === STATUS.IDLE;
+        if (!finalizedDuringAttempt) {
+          this.queuePosition = previousPosition;
+          this.status = previousStatus;
+          if (previousStatus === STATUS.PLAYING) {
+            this.startTrackingPosition(previousPositionInSeconds);
+          } else {
+            this.positionInSeconds = previousPositionInSeconds;
+          }
+          this.save();
+        }
+        throw error;
       }
-    } catch (error: unknown) {
-      this.queuePosition--;
-      throw error;
+      return;
     }
+
+    // Queue genuinely ran out.
+    await this.finishQueue();
   }
 
   registerVoiceActivityListener(guildSettings: Setting) {
@@ -501,7 +520,7 @@ export default class {
       );
       this.save();
     } else {
-      throw new Error("No songs in queue to forward to.");
+      throw new NoNextTrackError();
     }
   }
 
