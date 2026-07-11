@@ -19,6 +19,25 @@ test("constructor: registers the playnow slash command", () => {
   expect(makePlayNow().slashCommand.name).toBe("playnow");
 });
 
+test("constructor: query description omits Spotify without a third party", () => {
+  const cmd = new PlayNow(
+    undefined as unknown as ThirdParty,
+    { wrap: async () => [] } as unknown as KeyValueCacheProvider,
+    { addToQueue: mock(async () => {}) } as never,
+  );
+  const query = cmd.slashCommand
+    .toJSON()
+    .options?.find((option) => option.name === "query");
+  expect(query?.description).toBe("YouTube URL or search query");
+});
+
+test("constructor: query description mentions Spotify with a third party", () => {
+  const query = makePlayNow()
+    .slashCommand.toJSON()
+    .options?.find((option) => option.name === "query");
+  expect(query?.description).toContain("Spotify");
+});
+
 test("execute: forces front-of-queue and skip, forwarding shuffle/split", async () => {
   const addToQueue = mock(async () => {});
   const cmd = makePlayNow(addToQueue);

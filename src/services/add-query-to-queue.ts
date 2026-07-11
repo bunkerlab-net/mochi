@@ -88,9 +88,10 @@ export default class AddQueryToQueue {
       initialExtraMsg,
     );
 
-    // Only skip when a track was actually playing before we enqueued. On an
+    // Only skip when a track was already loaded before we enqueued. On an
     // idle/empty queue the newly added song becomes the current track and
-    // connectAndPlay starts it, so forwarding would skip past it.
+    // connectAndPlay starts it, so forwarding would skip past it. forward()
+    // resumes playback, so the requested track plays even if we were paused.
     const didSkipCurrentTrack = skipCurrentTrack && wasPlayingSong;
     if (didSkipCurrentTrack) {
       try {

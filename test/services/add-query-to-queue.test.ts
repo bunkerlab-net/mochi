@@ -175,6 +175,7 @@ test("reports the skip in the reply when a track was playing", async () => {
   const { interaction: i, replies } = interaction();
   await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
   expect(String(replies.at(-1))).toContain(" and current track skipped");
+  expect(player.forward).toHaveBeenCalledWith(1);
 });
 
 test("does not skip when nothing was playing before enqueue", async () => {
@@ -188,6 +189,19 @@ test("does not skip when nothing was playing before enqueue", async () => {
   await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
   expect(player.forward).not.toHaveBeenCalled();
   expect(String(replies.at(-1))).not.toContain("skipped");
+});
+
+test("skips to the requested track when the current one is loaded but idle", async () => {
+  const player = fakePlayer({
+    getCurrent: () => song(),
+    voiceConnection: {},
+    status: STATUS.IDLE,
+  });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
+  expect(player.forward).toHaveBeenCalledWith(1);
+  expect(String(replies.at(-1))).toContain(" and current track skipped");
 });
 
 test("starts playback when already connected but idle", async () => {

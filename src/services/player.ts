@@ -403,10 +403,14 @@ export default class {
     this.manualForward(skip);
 
     try {
-      if (this.getCurrent() && this.status !== STATUS.PAUSED) {
+      if (this.getCurrent()) {
+        // Advancing to a queued track always resumes playback, so /skip and
+        // the add-and-skip path start the next song even from a paused player
+        // instead of staying paused.
         await this.play();
-      } else if (this.status !== STATUS.PAUSED && (await this.tryAutoplay())) {
-        // Queue ran out — autoplay refilled it at the current position.
+      } else if (await this.tryAutoplay()) {
+        // Queue ran out — autoplay refilled it at the current position, so
+        // play it regardless of the previous pause state.
         await this.play();
       } else {
         await this.finishQueue();

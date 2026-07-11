@@ -534,6 +534,19 @@ test("forward: advances to the next song", async () => {
   expect(player.getCurrent()?.url).toBe("b");
 });
 
+test("forward: resumes playback when skipping from a paused player", async () => {
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.add(song({ url: "b" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.pause();
+  expect(player.status).toBe(STATUS.PAUSED);
+  await player.forward(1);
+  expect(player.getCurrent()?.url).toBe("b");
+  expect(player.status).toBe(STATUS.PLAYING);
+});
+
 test("forward: finishes the queue when nothing follows and autoplay is off", async () => {
   settings.autoplay = false;
   settings.secondsToWaitAfterQueueEmpties = 0;
@@ -570,6 +583,19 @@ test("tryAutoplay: refills the queue with related songs", async () => {
   await player.forward(1);
   autoplay.getRelatedSongs = async () => [];
   expect(player.getCurrent()?.url).toBe("related");
+});
+
+test("forward: plays an autoplay pick when skipping past the queue end while paused", async () => {
+  autoplay.getRelatedSongs = async () => [song({ url: "related" })];
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.voiceConnection = makeVoiceConnection() as never;
+  await player.play();
+  player.pause();
+  await player.forward(1);
+  autoplay.getRelatedSongs = async () => [];
+  expect(player.getCurrent()?.url).toBe("related");
+  expect(player.status).toBe(STATUS.PLAYING);
 });
 
 test("tryAutoplay: returns false when disabled", async () => {
