@@ -19,6 +19,13 @@ test("constructor: registers the playnow slash command", () => {
   expect(makePlayNow().slashCommand.name).toBe("playnow");
 });
 
+test("constructor: exposes only query, shuffle, and split options", () => {
+  const names = makePlayNow()
+    .slashCommand.toJSON()
+    .options?.map((option) => option.name);
+  expect(names).toEqual(["query", "shuffle", "split"]);
+});
+
 test("constructor: query description omits Spotify without a third party", () => {
   const cmd = new PlayNow(
     undefined as unknown as ThirdParty,

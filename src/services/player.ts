@@ -400,6 +400,8 @@ export default class {
   }
 
   async forward(skip: number): Promise<void> {
+    const previousPosition = this.queuePosition;
+    const previousPositionInSeconds = this.positionInSeconds;
     this.manualForward(skip);
 
     try {
@@ -416,7 +418,11 @@ export default class {
         await this.finishQueue();
       }
     } catch (error: unknown) {
-      this.queuePosition--;
+      // Starting the new track failed — restore the pre-skip position so a
+      // skip that can't play doesn't strand the player mid-queue.
+      this.queuePosition = previousPosition;
+      this.positionInSeconds = previousPositionInSeconds;
+      this.save();
       throw error;
     }
   }

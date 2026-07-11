@@ -21,7 +21,12 @@ import logger from "../utils/logger.js";
 import type Config from "./config.js";
 import type KeyValueCacheProvider from "./key-value-cache.js";
 import type Player from "./player.js";
-import { MediaSource, type SongMetadata, STATUS } from "./player.js";
+import {
+  MediaSource,
+  type QueuedSong,
+  type SongMetadata,
+  STATUS,
+} from "./player.js";
 
 @injectable()
 export default class AddQueryToQueue {
@@ -61,7 +66,6 @@ export default class AddQueryToQueue {
   }): Promise<void> {
     const guildId = getGuildId(interaction);
     const player = this.playerManager.get(guildId);
-    const wasPlayingSong = player.getCurrent() !== null;
 
     const [targetVoiceChannel] =
       getMemberVoiceChannel(interaction.member as GuildMember) ??
@@ -70,6 +74,7 @@ export default class AddQueryToQueue {
     const {
       newSongs,
       firstSong,
+      currentBeforeEnqueue,
       extraMsg: initialExtraMsg,
     } = await this.prepareAndEnqueueSongs({
       query,
@@ -84,15 +89,19 @@ export default class AddQueryToQueue {
       player,
       targetVoiceChannel,
       interaction,
-      wasPlayingSong,
+      currentBeforeEnqueue !== null,
       initialExtraMsg,
     );
 
-    // Only skip when a track was already loaded before we enqueued. On an
-    // idle/empty queue the newly added song becomes the current track and
-    // connectAndPlay starts it, so forwarding would skip past it. forward()
-    // resumes playback, so the requested track plays even if we were paused.
-    const didSkipCurrentTrack = skipCurrentTrack && wasPlayingSong;
+    // Skip only when the track that was playing when we enqueued is still the
+    // current one. On an idle/empty queue the new song becomes current and
+    // connectAndPlay starts it (nothing to skip); if the previous track ended
+    // while we resolved songs, identity differs so we don't skip past the
+    // request. forward() resumes playback, so it plays even if we were paused.
+    const didSkipCurrentTrack =
+      skipCurrentTrack &&
+      currentBeforeEnqueue !== null &&
+      player.getCurrent() === currentBeforeEnqueue;
     if (didSkipCurrentTrack) {
       try {
         await player.forward(1);
@@ -128,6 +137,7 @@ export default class AddQueryToQueue {
   }): Promise<{
     newSongs: SongMetadata[];
     firstSong: SongMetadata;
+    currentBeforeEnqueue: QueuedSong | null;
     extraMsg: string;
   }> {
     const guildId = getGuildId(interaction);
@@ -158,16 +168,12 @@ export default class AddQueryToQueue {
       );
     }
 
-    newSongs.forEach((song) => {
-      player.add(
-        {
-          ...song,
-          addedInChannelId: interaction.channelId,
-          requestedBy: getMemberUserId(interaction),
-        },
-        { immediate: addToFrontOfQueue ?? false },
-      );
-    });
+    // Capture the current track right before enqueueing so the skip decision
+    // uses identity: if the previous track ends (or the queue advances) while
+    // we resolve songs, getCurrent() differs and we won't skip the request.
+    const currentBeforeEnqueue = player.getCurrent();
+
+    this.addSongsToQueue({ newSongs, addToFrontOfQueue, player, interaction });
 
     logger.info(
       "queue",
@@ -179,7 +185,39 @@ export default class AddQueryToQueue {
       throw new Error("no songs found");
     }
 
-    return { newSongs, firstSong, extraMsg };
+    return { newSongs, firstSong, currentBeforeEnqueue, extraMsg };
+  }
+
+  private addSongsToQueue({
+    newSongs,
+    addToFrontOfQueue,
+    player,
+    interaction,
+  }: {
+    newSongs: SongMetadata[];
+    addToFrontOfQueue: boolean;
+    player: Player;
+    interaction: ChatInputCommandInteraction;
+  }): void {
+    // player.add({ immediate }) inserts each song right after the current one,
+    // so adding a multi-song batch front-first would reverse it. Enqueue in
+    // reverse for front insertion to keep the queue in newSongs order. Playlist
+    // songs always append (add ignores immediate for them), so skip reversal.
+    const enqueueOrder =
+      addToFrontOfQueue && !newSongs.some((song) => song.playlist)
+        ? [...newSongs].reverse()
+        : newSongs;
+
+    enqueueOrder.forEach((song) => {
+      player.add(
+        {
+          ...song,
+          addedInChannelId: interaction.channelId,
+          requestedBy: getMemberUserId(interaction),
+        },
+        { immediate: addToFrontOfQueue },
+      );
+    });
   }
 
   private async connectAndPlay(

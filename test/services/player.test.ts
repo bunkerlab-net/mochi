@@ -203,6 +203,9 @@ afterEach(() => {
   if (timer) {
     clearTimeout(timer);
   }
+  // Restore the autoplay stub so a mutation can't leak to later tests, even if
+  // an assertion above throws before an inline reset runs.
+  autoplay.getRelatedSongs = async () => [];
   active = undefined;
 });
 
