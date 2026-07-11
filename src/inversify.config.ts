@@ -18,6 +18,7 @@ import Next from "./commands/next.js";
 import NowPlaying from "./commands/now-playing.js";
 import Pause from "./commands/pause.js";
 import Play from "./commands/play.js";
+import PlayNow from "./commands/playnow.js";
 import QueueCommand from "./commands/queue.js";
 import Remove from "./commands/remove.js";
 import Replay from "./commands/replay.js";
@@ -118,6 +119,7 @@ if (config.LASTFM_API_KEY !== "") {
   NowPlaying,
   Pause,
   Play,
+  PlayNow,
   QueueCommand,
   Remove,
   Replay,

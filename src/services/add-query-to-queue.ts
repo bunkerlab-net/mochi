@@ -88,10 +88,14 @@ export default class AddQueryToQueue {
       initialExtraMsg,
     );
 
-    if (skipCurrentTrack) {
+    // Only skip when a track was actually playing before we enqueued. On an
+    // idle/empty queue the newly added song becomes the current track and
+    // connectAndPlay starts it, so forwarding would skip past it.
+    const didSkipCurrentTrack = skipCurrentTrack && wasPlayingSong;
+    if (didSkipCurrentTrack) {
       try {
         await player.forward(1);
-      } catch (_: unknown) {
+      } catch {
         throw new Error("no song to skip to");
       }
     }
@@ -101,7 +105,7 @@ export default class AddQueryToQueue {
       newSongs,
       firstSong,
       addToFrontOfQueue,
-      skipCurrentTrack,
+      didSkipCurrentTrack,
       extraMsg,
     );
   }
@@ -231,11 +235,11 @@ export default class AddQueryToQueue {
 
     if (newSongs.length === 1) {
       await interaction.editReply(
-        `hai, **${firstSong.title}** added to the${addToFrontOfQueue ? " front of the" : ""} queue${skipCurrentTrack ? "and current track skipped" : ""}${msg}`,
+        `hai, **${firstSong.title}** added to the${addToFrontOfQueue ? " front of the" : ""} queue${skipCurrentTrack ? " and current track skipped" : ""}${msg}`,
       );
     } else {
       await interaction.editReply(
-        `hai, **${firstSong.title}** and ${newSongs.length - 1} other songs were added to the queue${skipCurrentTrack ? "and current track skipped" : ""}${msg}`,
+        `hai, **${firstSong.title}** and ${newSongs.length - 1} other songs were added to the queue${skipCurrentTrack ? " and current track skipped" : ""}${msg}`,
       );
     }
   }

@@ -38,18 +38,13 @@ export default class implements Command {
     this.cache = cache;
     this.addQueryToQueue = addQueryToQueue;
 
-    const queryDescription =
-      thirdParty === undefined
-        ? "YouTube URL or search query"
-        : "YouTube URL, Spotify URL, or search query";
-
     this.slashCommand = new SlashCommandBuilder()
       .setName("play")
       .setDescription("play a song")
       .addStringOption((option) =>
         option
           .setName("query")
-          .setDescription(queryDescription)
+          .setDescription(this.queryDescription())
           .setAutocomplete(true)
           .setRequired(true),
       )
@@ -75,18 +70,44 @@ export default class implements Command {
       );
   }
 
+  // Query-option help text reflecting whether Spotify lookups are available.
+  // Shared with subclasses (e.g. /playnow) so the described capabilities can't
+  // drift from what's actually configured.
+  protected queryDescription(): string {
+    return this.spotify
+      ? "YouTube URL, Spotify URL, or search query"
+      : "YouTube URL or search query";
+  }
+
   public async execute(
     interaction: ChatInputCommandInteraction,
+  ): Promise<void> {
+    await this.enqueueQuery(interaction, {
+      addToFrontOfQueue: interaction.options.getBoolean("immediate") ?? false,
+      skipCurrentTrack: interaction.options.getBoolean("skip") ?? false,
+    });
+  }
+
+  // Shared enqueue path for /play and its variants (e.g. /playnow). Reads the
+  // query and the shuffle/split options here so subclasses can't drift from
+  // that handling; the front-of-queue and skip flags are supplied by the
+  // caller.
+  protected async enqueueQuery(
+    interaction: ChatInputCommandInteraction,
+    {
+      addToFrontOfQueue,
+      skipCurrentTrack,
+    }: { addToFrontOfQueue: boolean; skipCurrentTrack: boolean },
   ): Promise<void> {
     const query = interaction.options.getString("query", true);
 
     await this.addQueryToQueue.addToQueue({
       interaction,
       query: query.trim(),
-      addToFrontOfQueue: interaction.options.getBoolean("immediate") ?? false,
+      addToFrontOfQueue,
       shuffleAdditions: interaction.options.getBoolean("shuffle") ?? false,
       shouldSplitChapters: interaction.options.getBoolean("split") ?? false,
-      skipCurrentTrack: interaction.options.getBoolean("skip") ?? false,
+      skipCurrentTrack,
     });
   }
 

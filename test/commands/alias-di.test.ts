@@ -27,3 +27,11 @@ test.each([
 ])("/%s resolves its injected playerManager via DI", (name) => {
   expect(withPlayerManager(name)?.playerManager).toBeDefined();
 });
+
+test("/playnow resolves its injected addQueryToQueue via DI", () => {
+  const command = commands.find((c) => c.slashCommand.name === "playnow") as
+    | (Command & { addQueryToQueue?: unknown })
+    | undefined;
+  expect(command, "command /playnow is not registered").toBeDefined();
+  expect(command?.addQueryToQueue).toBeDefined();
+});

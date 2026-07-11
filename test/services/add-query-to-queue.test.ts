@@ -169,6 +169,27 @@ test("throws a friendly error when there is nothing to skip to", async () => {
   ).rejects.toThrow("no song to skip to");
 });
 
+test("reports the skip in the reply when a track was playing", async () => {
+  const player = fakePlayer();
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
+  expect(String(replies.at(-1))).toContain(" and current track skipped");
+});
+
+test("does not skip when nothing was playing before enqueue", async () => {
+  const player = fakePlayer({
+    getCurrent: () => null,
+    voiceConnection: {},
+    status: STATUS.IDLE,
+  });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i, replies } = interaction();
+  await cmd.addToQueue({ ...baseArgs, skipCurrentTrack: true, interaction: i });
+  expect(player.forward).not.toHaveBeenCalled();
+  expect(String(replies.at(-1))).not.toContain("skipped");
+});
+
 test("starts playback when already connected but idle", async () => {
   const player = fakePlayer({ voiceConnection: {}, status: STATUS.IDLE });
   const cmd = make({ getSongs: async () => [[song()], ""], player });
