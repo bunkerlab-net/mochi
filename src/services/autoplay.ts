@@ -1,5 +1,5 @@
 import shuffle from "array-shuffle";
-import { inject, injectable, optional } from "inversify";
+import { inject, injectable, optional, unmanaged } from "inversify";
 import { TYPES } from "../types.js";
 import logger from "../utils/logger.js";
 import { getYouTubeMixEntries } from "../utils/yt-dlp.js";
@@ -11,13 +11,17 @@ import type YoutubeAPI from "./youtube-api.js";
 export default class Autoplay {
   private readonly youtubeAPI: YoutubeAPI;
   private readonly lastfmAPI: LastfmAPI | undefined;
+  private readonly getMixEntries: typeof getYouTubeMixEntries;
 
   constructor(
     @inject(TYPES.Services.YoutubeAPI) youtubeAPI: YoutubeAPI,
     @inject(TYPES.Services.LastfmAPI) @optional() lastfmAPI?: LastfmAPI,
+    @unmanaged()
+    getMixEntries: typeof getYouTubeMixEntries = getYouTubeMixEntries,
   ) {
     this.youtubeAPI = youtubeAPI;
     this.lastfmAPI = lastfmAPI;
+    this.getMixEntries = getMixEntries;
   }
 
   /**
@@ -125,7 +129,7 @@ export default class Autoplay {
     }
 
     // Over-fetch so post-filtering against the exclude set still yields `limit`.
-    const entries = await getYouTubeMixEntries(
+    const entries = await this.getMixEntries(
       seed.url,
       limit + exclude.size + 5,
     );
