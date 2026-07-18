@@ -19,14 +19,12 @@ const withPlayerManager = (name: string) => {
   return command;
 };
 
-test.each([
-  ["join"],
-  ["summon"],
-  ["skip"],
-  ["next"],
-])("/%s resolves its injected playerManager via DI", (name) => {
-  expect(withPlayerManager(name)?.playerManager).toBeDefined();
-});
+test.each([["join"], ["summon"], ["skip"], ["next"]])(
+  "/%s resolves its injected playerManager via DI",
+  (name) => {
+    expect(withPlayerManager(name)?.playerManager).toBeDefined();
+  },
+);
 
 test("/playnow resolves its injected addQueryToQueue via DI", () => {
   const command = commands.find((c) => c.slashCommand.name === "playnow") as
