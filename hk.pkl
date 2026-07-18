@@ -51,7 +51,10 @@ hooks {
     steps = (linters) {
       // Run every package's test script (coverage thresholds are per-package)
       ["test"] {
-        check = "bun run --filter '*' test"
+        check = "bun test"
+      }
+      ["typecheck"] {
+        check = "bun run --filter '*' typecheck"
       }
     }
     stash = "git"
