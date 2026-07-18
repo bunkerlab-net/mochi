@@ -10,9 +10,9 @@ pipx.uvx = true
 bun = "1"
 ffmpeg = "8"
 gh = "2"
-hk = "1.48.0"
+hk = "1.51.0"
 node = "24"
-pkl = "0.31"
+pkl = "0.32"
 usage = "latest"
 uv = "0.11"
 
