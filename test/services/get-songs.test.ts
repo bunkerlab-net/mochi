@@ -16,8 +16,9 @@ mock.module("fluent-ffmpeg", () => ({
   }),
 }));
 
-// SoundCloud resolution shells out to yt-dlp via getSoundCloudSongs. Stub it so
-// dispatch is tested without spawning a process.
+// SoundCloud resolution shells out to yt-dlp via getSoundCloudSongs. It is
+// injected into GetSongs (see makeGetSongs) rather than module-mocking the
+// yt-dlp source module, which would leak into yt-dlp.test.ts on Linux.
 type SoundCloudResult = {
   tracks: Array<{
     url: string;
@@ -29,9 +30,6 @@ type SoundCloudResult = {
   playlist: { title: string; url: string } | null;
 };
 let soundcloudResult: SoundCloudResult = { tracks: [], playlist: null };
-mock.module("../../src/utils/yt-dlp.js", () => ({
-  getSoundCloudSongs: async () => soundcloudResult,
-}));
 
 const { default: GetSongs } = await import("../../src/services/get-songs.js");
 const { MediaSource } = await import("../../src/services/player.js");
@@ -49,7 +47,11 @@ const ytSong = (url: string) => ({
 });
 
 const makeGetSongs = (youtube: unknown, spotify?: unknown) =>
-  new GetSongs(youtube as YoutubeAPI, spotify as SpotifyAPI);
+  new GetSongs(
+    youtube as YoutubeAPI,
+    spotify as SpotifyAPI,
+    (async () => soundcloudResult) as never,
+  );
 
 beforeEach(() => {
   ffprobeError = null;

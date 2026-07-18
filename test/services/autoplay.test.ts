@@ -2,21 +2,14 @@ import { beforeEach, expect, mock, test } from "bun:test";
 import type LastfmAPI from "../../src/services/lastfm-api.js";
 import type YoutubeAPI from "../../src/services/youtube-api.js";
 
-// autoplay imports getYouTubeMixEntries (yt-dlp) and MediaSource (player →
-// get-guild-settings → DI). Mock both to control the mix and keep inversify out.
+// autoplay imports MediaSource (player → get-guild-settings → DI); mock
+// get-guild-settings to keep inversify out. The YouTube mix is injected into
+// Autoplay via getMixEntries (see makeAutoplay) rather than module-mocking the
+// yt-dlp source module, which would leak into yt-dlp.test.ts on Linux.
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => ({}),
 }));
 let mixEntries: Array<Record<string, unknown>> = [];
-mock.module("../../src/utils/yt-dlp.js", () => ({
-  getYouTubeMixEntries: async () => mixEntries,
-  getYouTubeMediaSource: async () => ({ url: "x", headers: {}, isLive: false }),
-  getSoundCloudMediaSource: async () => ({
-    url: "x",
-    headers: {},
-    isLive: false,
-  }),
-}));
 mock.module("array-shuffle", () => ({
   default: <T>(items: readonly T[]): T[] => [...items],
 }));
@@ -53,7 +46,11 @@ const seed = (overrides: Record<string, unknown> = {}) =>
   }) as never;
 
 const makeAutoplay = (youtube: unknown, lastfm?: unknown) =>
-  new Autoplay(youtube as YoutubeAPI, lastfm as LastfmAPI);
+  new Autoplay(
+    youtube as YoutubeAPI,
+    lastfm as LastfmAPI,
+    (async () => mixEntries) as never,
+  );
 
 beforeEach(() => {
   mixEntries = [];

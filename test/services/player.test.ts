@@ -6,10 +6,12 @@ import { loadPlayerState } from "../../src/utils/player-state.js";
 // Mock player.ts's heavy dependencies. get-guild-settings is mocked to keep the
 // DI container (inversify.config) out of the test graph; the voice/ffmpeg/
 // fs-capacitor mocks let the streaming methods run without real audio
-// infrastructure. build-embed is intentionally NOT mocked here: it is a local
-// source module that build-embed.test.ts needs real, and mocking it leaks the
-// stub across files on platforms where bun doesn't reset module mocks. The song
-// fixtures below satisfy the real build-embed.
+// infrastructure. yt-dlp media resolution is injected via the Player
+// constructor (see mediaResolvers below) rather than module-mocked: mocking the
+// yt-dlp source module leaks the stub into yt-dlp.test.ts on platforms where bun
+// doesn't reset module mocks. build-embed is likewise NOT mocked here: it is a
+// local source module that build-embed.test.ts needs real. The song fixtures
+// below satisfy the real build-embed.
 // ---------------------------------------------------------------------------
 let settings: Record<string, unknown> = {};
 let mediaSource = {
@@ -22,17 +24,6 @@ let entersStateImpl: () => Promise<void> = async () => {};
 
 mock.module("../../src/utils/get-guild-settings.js", () => ({
   getGuildSettings: async () => settings,
-}));
-mock.module("../../src/utils/yt-dlp.js", () => ({
-  getYouTubeMediaSource: async () => {
-    // Let a test force a stream-resolution failure to exercise the real
-    // play()/startFreshStream recovery path.
-    if (mediaSourceError) {
-      throw mediaSourceError;
-    }
-    return mediaSource;
-  },
-  getSoundCloudMediaSource: async () => mediaSource,
 }));
 
 const fakeReadable = () => ({
@@ -152,6 +143,17 @@ const fileCache = {
   createWriteStream: () => fakeReadable(),
 };
 const autoplay = { getRelatedSongs: async () => [] as unknown[] };
+const mediaResolvers = {
+  getYouTubeMediaSource: async () => {
+    // Let a test force a stream-resolution failure to exercise the real
+    // play()/startFreshStream recovery path.
+    if (mediaSourceError) {
+      throw mediaSourceError;
+    }
+    return mediaSource;
+  },
+  getSoundCloudMediaSource: async () => mediaSource,
+};
 
 type AnyPlayer = InstanceType<typeof Player> & Record<string, unknown>;
 
@@ -162,6 +164,7 @@ const makePlayer = (guildId = "guild-1") => {
     fileCache as never,
     guildId,
     autoplay as never,
+    mediaResolvers as never,
   ) as AnyPlayer;
   active = player;
   return player;

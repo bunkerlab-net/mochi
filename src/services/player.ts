@@ -106,6 +106,11 @@ const STREAM_RECONNECT_OPTIONS = [
 
 type FfmpegCommand = ReturnType<typeof ffmpeg>;
 
+type MediaSourceResolvers = {
+  getYouTubeMediaSource: typeof getYouTubeMediaSource;
+  getSoundCloudMediaSource: typeof getSoundCloudMediaSource;
+};
+
 export default class {
   public voiceConnection: VoiceConnection | null = null;
   public status = STATUS.PAUSED;
@@ -127,6 +132,7 @@ export default class {
   private positionInSeconds = 0;
   private readonly fileCache: FileCacheProvider;
   private readonly autoplay: Autoplay | undefined;
+  private readonly mediaResolvers: MediaSourceResolvers;
   private disconnectTimer: NodeJS.Timeout | null = null;
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
@@ -137,10 +143,15 @@ export default class {
     fileCache: FileCacheProvider,
     guildId: string,
     autoplay?: Autoplay,
+    mediaResolvers: MediaSourceResolvers = {
+      getYouTubeMediaSource,
+      getSoundCloudMediaSource,
+    },
   ) {
     this.fileCache = fileCache;
     this.guildId = guildId;
     this.autoplay = autoplay;
+    this.mediaResolvers = mediaResolvers;
   }
 
   async connect(channel: VoiceChannel): Promise<void> {
@@ -749,8 +760,8 @@ export default class {
     if (!ffmpegInput) {
       const mediaSource =
         song.source === MediaSource.SoundCloud
-          ? await getSoundCloudMediaSource(song.url)
-          : await getYouTubeMediaSource(song.url);
+          ? await this.mediaResolvers.getSoundCloudMediaSource(song.url)
+          : await this.mediaResolvers.getYouTubeMediaSource(song.url);
       ffmpegInput = mediaSource.url;
 
       // Don't cache livestreams or long videos

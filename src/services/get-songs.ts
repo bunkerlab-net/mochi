@@ -1,6 +1,6 @@
 import { URL } from "node:url";
 import ffmpeg from "fluent-ffmpeg";
-import { inject, injectable, optional } from "inversify";
+import { inject, injectable, optional, unmanaged } from "inversify";
 import * as spotifyURI from "spotify-uri";
 import { TYPES } from "../types.js";
 import { getSoundCloudSongs } from "../utils/yt-dlp.js";
@@ -17,13 +17,17 @@ import type YoutubeAPI from "./youtube-api.js";
 export default class {
   private readonly youtubeAPI: YoutubeAPI;
   private readonly spotifyAPI: SpotifyAPI | undefined;
+  private readonly getSoundCloudSongs: typeof getSoundCloudSongs;
 
   constructor(
     @inject(TYPES.Services.YoutubeAPI) youtubeAPI: YoutubeAPI,
     @inject(TYPES.Services.SpotifyAPI) @optional() spotifyAPI?: SpotifyAPI,
+    @unmanaged()
+    getSoundCloudSongsFn: typeof getSoundCloudSongs = getSoundCloudSongs,
   ) {
     this.youtubeAPI = youtubeAPI;
     this.spotifyAPI = spotifyAPI;
+    this.getSoundCloudSongs = getSoundCloudSongsFn;
   }
 
   async getSongs(
@@ -242,7 +246,10 @@ export default class {
     url: string,
     playlistLimit: number,
   ): Promise<SongMetadata[]> {
-    const { tracks, playlist } = await getSoundCloudSongs(url, playlistLimit);
+    const { tracks, playlist } = await this.getSoundCloudSongs(
+      url,
+      playlistLimit,
+    );
 
     const queuedPlaylist: QueuedPlaylist | null = playlist
       ? { title: playlist.title, source: playlist.url }
