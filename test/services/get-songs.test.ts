@@ -70,7 +70,10 @@ test("resolves a YouTube video url", async () => {
 
 test("resolves a YouTube playlist url", async () => {
   const youtube = {
-    getPlaylist: async () => [ytSong("p1"), ytSong("p2")],
+    getPlaylist: async () => ({
+      songs: [ytSong("p1"), ytSong("p2")],
+      truncated: false,
+    }),
   };
   const [songs] = await makeGetSongs(youtube).getSongs(
     "https://www.youtube.com/watch?v=abcdefghijk&list=PL123",
@@ -261,7 +264,7 @@ test("resolves a YouTube Music channel url", async () => {
   const youtube = {
     getChannel: async (...received: unknown[]) => {
       args = received;
-      return [ytSong("c1"), ytSong("c2")];
+      return { songs: [ytSong("c1"), ytSong("c2")], truncated: false };
     },
   };
   const [songs, msg] = await makeGetSongs(youtube).getSongs(
@@ -274,13 +277,16 @@ test("resolves a YouTube Music channel url", async () => {
   expect(args).toEqual(["UC17Plu6pe6IJVXUttD2uIWA", false, 50]);
 });
 
-test("notes truncation when a channel fills the playlist limit", async () => {
+test("notes truncation when a channel reports left-out tracks", async () => {
   const youtube = {
-    getChannel: async () => [ytSong("c1"), ytSong("c2")],
+    getChannel: async () => ({
+      songs: [ytSong("c1"), ytSong("c2")],
+      truncated: true,
+    }),
   };
   const [songs, msg] = await makeGetSongs(youtube).getSongs(
     "https://www.youtube.com/channel/UC17Plu6pe6IJVXUttD2uIWA/videos",
-    2,
+    50,
     false,
   );
   expect(songs).toHaveLength(2);

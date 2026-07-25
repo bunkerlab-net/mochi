@@ -129,13 +129,18 @@ export default class {
     const listId = url.searchParams.get("list");
 
     if (listId) {
-      return [await this.youtubePlaylist(listId, shouldSplitChapters), ""];
+      const { songs } = await this.youtubeAPI.getPlaylist(
+        listId,
+        shouldSplitChapters,
+      );
+
+      return [songs, ""];
     }
 
     const channelId = YOUTUBE_CHANNEL_PATH.exec(url.pathname)?.[1];
 
     if (channelId) {
-      const songs = await this.youtubeAPI.getChannel(
+      const { songs, truncated } = await this.youtubeAPI.getChannel(
         channelId,
         shouldSplitChapters,
         playlistLimit,
@@ -143,9 +148,7 @@ export default class {
 
       return [
         songs,
-        songs.length >= playlistLimit
-          ? `only the first ${playlistLimit} tracks were added`
-          : "",
+        truncated ? `only the first ${songs.length} tracks were added` : "",
       ];
     }
 
@@ -193,13 +196,6 @@ export default class {
     shouldSplitChapters: boolean,
   ): Promise<SongMetadata[]> {
     return this.youtubeAPI.getVideo(url, shouldSplitChapters);
-  }
-
-  private async youtubePlaylist(
-    listId: string,
-    shouldSplitChapters: boolean,
-  ): Promise<SongMetadata[]> {
-    return this.youtubeAPI.getPlaylist(listId, shouldSplitChapters);
   }
 
   private async spotifySource(

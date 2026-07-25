@@ -163,7 +163,7 @@ export default class {
     channelId: string,
     shouldSplitChapters: boolean,
     limit: number,
-  ): Promise<SongMetadata[]> {
+  ): Promise<{ songs: SongMetadata[]; truncated: boolean }> {
     const channelParams = {
       searchParams: {
         part: "contentDetails",
@@ -192,17 +192,14 @@ export default class {
     return this.getPlaylist(uploadsListId, shouldSplitChapters, limit);
   }
 
-  async getPlaylist(
-    listId: string,
-    shouldSplitChapters: boolean,
-    limit?: number,
-  ): Promise<SongMetadata[]> {
+  private async fetchPlaylist(listId: string): Promise<PlaylistResponse> {
     const playlistParams = {
       searchParams: {
         part: "id, snippet, contentDetails",
         id: listId,
       },
     };
+
     const { items: playlists } = await this.cache.wrap(
       async () =>
         this.got("playlists", playlistParams).json() as Promise<{
@@ -220,6 +217,21 @@ export default class {
       throw new Error("Playlist could not be found.");
     }
 
+    return playlist;
+  }
+
+  /**
+   * Resolve a playlist to queueable tracks. `limit` caps the tracks returned.
+   * Chapter splitting turns one video into several, so the cap only holds once
+   * that expansion is done; `truncated` says whether it left tracks out.
+   */
+  async getPlaylist(
+    listId: string,
+    shouldSplitChapters: boolean,
+    limit?: number,
+  ): Promise<{ songs: SongMetadata[]; truncated: boolean }> {
+    const playlist = await this.fetchPlaylist(listId);
+
     const { playlistVideos, videoDetails } =
       await this.fetchPlaylistItemsAndDetails(listId, playlist, limit);
 
@@ -228,7 +240,7 @@ export default class {
       source: playlist.id,
     };
 
-    const songsToReturn: SongMetadata[] = [];
+    const songs: SongMetadata[] = [];
 
     for (const video of playlistVideos) {
       try {
@@ -239,7 +251,7 @@ export default class {
           continue;
         }
 
-        songsToReturn.push(
+        songs.push(
           ...this.getMetadataFromVideo({
             video: videoDetail,
             queuedPlaylist,
@@ -252,7 +264,17 @@ export default class {
       }
     }
 
-    return songsToReturn;
+    // Videos the cap kept us from fetching, plus tracks trimmed after chapter
+    // splitting expanded the videos we did fetch.
+    const truncated =
+      limit !== undefined &&
+      (limit < playlist.contentDetails.itemCount || songs.length > limit);
+
+    if (limit !== undefined && songs.length > limit) {
+      songs.length = limit;
+    }
+
+    return { songs, truncated };
   }
 
   private async fetchPlaylistItemsAndDetails(

@@ -176,7 +176,7 @@ test("getPlaylist: returns metadata for every resolvable item", async () => {
     },
     videos: { items: [videoDetail("v1"), videoDetail("v2")] },
   };
-  const songs = await makeApi().getPlaylist("PL1", false);
+  const { songs } = await makeApi().getPlaylist("PL1", false);
   expect(songs).toHaveLength(2);
   expect(songs[0]?.playlist?.title).toBe("My Playlist");
 });
@@ -207,7 +207,7 @@ test("getPlaylist: skips items with no matching video detail", async () => {
     },
     videos: { items: [videoDetail("v1")] },
   };
-  const songs = await makeApi().getPlaylist("PL1", false);
+  const { songs } = await makeApi().getPlaylist("PL1", false);
   expect(songs).toHaveLength(1);
 });
 
@@ -235,9 +235,10 @@ test("getChannel: queues the channel's uploads, capped at the limit", async () =
     videos: { items: [videoDetail("v1"), videoDetail("v2")] },
   };
 
-  const songs = await makeApi().getChannel("UC1", false, 2);
+  const { songs, truncated } = await makeApi().getChannel("UC1", false, 2);
 
   expect(songs).toHaveLength(2);
+  expect(truncated).toBe(true);
   expect(songs[0]?.playlist).toEqual({
     title: "Uploads from Chan",
     source: "UU1",
@@ -278,7 +279,7 @@ test("getPlaylist: stops paging when a short page has no next token", async () =
     videos: { items: [videoDetail("v1"), videoDetail("v2")] },
   };
 
-  const songs = await makeApi().getPlaylist("PL1", false);
+  const { songs } = await makeApi().getPlaylist("PL1", false);
 
   expect(songs).toHaveLength(2);
   expect(
@@ -300,7 +301,7 @@ test("getPlaylist: stops on an empty page without requesting video details", asy
     playlistItems: { items: [] },
   };
 
-  const songs = await makeApi().getPlaylist("PL1", false);
+  const { songs } = await makeApi().getPlaylist("PL1", false);
 
   expect(songs).toHaveLength(0);
   expect(
@@ -308,4 +309,42 @@ test("getPlaylist: stops on an empty page without requesting video details", asy
   ).toHaveLength(1);
   // A zero-id videos request is rejected by the API, so it must never happen.
   expect(requests.some((request) => request.endpoint === "videos")).toBe(false);
+});
+
+test("getChannel: caps chapter-split tracks, not just videos", async () => {
+  responses = {
+    channels: {
+      items: [{ contentDetails: { relatedPlaylists: { uploads: "UU1" } } }],
+    },
+    playlists: {
+      items: [
+        {
+          id: "UU1",
+          snippet: { title: "Uploads from Chan" },
+          contentDetails: { itemCount: 1 },
+        },
+      ],
+    },
+    playlistItems: { items: [{ contentDetails: { videoId: "v1" } }] },
+    videos: {
+      items: [
+        videoDetail("v1", {
+          snippet: {
+            title: "Set",
+            channelTitle: "C",
+            liveBroadcastContent: "none",
+            description: "0:00 One\n1:00 Two\n2:00 Three",
+            thumbnails: { medium: { url: "u" } },
+          },
+        }),
+      ],
+    },
+  };
+
+  const { songs, truncated } = await makeApi().getChannel("UC1", true, 2);
+
+  // The single video expands into three chapter tracks, so the cap has to bite
+  // after that expansion rather than on the video count.
+  expect(songs.map((song) => song.title)).toEqual(["One (Set)", "Two (Set)"]);
+  expect(truncated).toBe(true);
 });
