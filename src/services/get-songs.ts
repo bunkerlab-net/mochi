@@ -13,6 +13,10 @@ import type SpotifyAPI from "./spotify-api.js";
 import type { SpotifyTrack } from "./spotify-api.js";
 import type YoutubeAPI from "./youtube-api.js";
 
+// A YouTube Music artist page is a channel URL: /channel/<id>. Any trailing
+// path (eg. /videos) is ignored — only the id matters.
+const YOUTUBE_CHANNEL_PATH = /^\/channel\/([^/]+)/;
+
 @injectable()
 export default class {
   private readonly youtubeAPI: YoutubeAPI;
@@ -83,22 +87,13 @@ export default class {
     ];
 
     if (YOUTUBE_HOSTS.includes(url.host)) {
-      // YouTube source
-      const listId = url.searchParams.get("list");
-      if (listId) {
-        // YouTube playlist
-        newSongs.push(
-          ...(await this.youtubePlaylist(listId, shouldSplitChapters)),
-        );
-      } else {
-        const songs = await this.youtubeVideo(url.href, shouldSplitChapters);
-
-        if (songs) {
-          newSongs.push(...songs);
-        } else {
-          throw new Error("that doesn't exist");
-        }
-      }
+      const [youtubeSongs, msg] = await this.handleYouTubeSource(
+        url,
+        playlistLimit,
+        shouldSplitChapters,
+      );
+      extraMsg = msg;
+      newSongs.push(...youtubeSongs);
     } else if (url.protocol === "spotify:" || url.host === "open.spotify.com") {
       if (this.spotifyAPI === undefined) {
         throw new Error("Spotify is not enabled!");
@@ -124,6 +119,37 @@ export default class {
     }
 
     return [newSongs, extraMsg];
+  }
+
+  private async handleYouTubeSource(
+    url: URL,
+    playlistLimit: number,
+    shouldSplitChapters: boolean,
+  ): Promise<[SongMetadata[], string]> {
+    const listId = url.searchParams.get("list");
+
+    if (listId) {
+      return [await this.youtubePlaylist(listId, shouldSplitChapters), ""];
+    }
+
+    const channelId = YOUTUBE_CHANNEL_PATH.exec(url.pathname)?.[1];
+
+    if (channelId) {
+      const songs = await this.youtubeAPI.getChannel(
+        channelId,
+        shouldSplitChapters,
+        playlistLimit,
+      );
+
+      return [
+        songs,
+        songs.length >= playlistLimit
+          ? `only the first ${playlistLimit} tracks were added`
+          : "",
+      ];
+    }
+
+    return [await this.youtubeVideo(url.href, shouldSplitChapters), ""];
   }
 
   private async handleSpotifySource(

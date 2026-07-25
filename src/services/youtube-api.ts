@@ -45,6 +45,14 @@ interface PlaylistResponse {
   };
 }
 
+interface ChannelResponse {
+  contentDetails: {
+    relatedPlaylists: {
+      uploads?: string;
+    };
+  };
+}
+
 interface PlaylistItemsResponse {
   items: PlaylistItem[];
   nextPageToken?: string;
@@ -146,9 +154,48 @@ export default class {
     return this.getMetadataFromVideo({ video, shouldSplitChapters });
   }
 
+  /**
+   * Resolve a channel (a YouTube Music artist page is one) to its uploads
+   * playlist, which holds every track the channel published. Capped at `limit`
+   * because channels routinely hold thousands of uploads.
+   */
+  async getChannel(
+    channelId: string,
+    shouldSplitChapters: boolean,
+    limit: number,
+  ): Promise<SongMetadata[]> {
+    const channelParams = {
+      searchParams: {
+        part: "contentDetails",
+        id: channelId,
+      },
+    };
+
+    const { items: channels } = await this.cache.wrap(
+      async () =>
+        this.got("channels", channelParams).json() as Promise<{
+          items: ChannelResponse[];
+        }>,
+      channelParams,
+      {
+        expiresIn: ONE_HOUR_IN_SECONDS,
+      },
+    );
+
+    const uploadsListId =
+      channels.at(0)?.contentDetails.relatedPlaylists.uploads;
+
+    if (!uploadsListId) {
+      throw new Error("Channel could not be found.");
+    }
+
+    return this.getPlaylist(uploadsListId, shouldSplitChapters, limit);
+  }
+
   async getPlaylist(
     listId: string,
     shouldSplitChapters: boolean,
+    limit?: number,
   ): Promise<SongMetadata[]> {
     const playlistParams = {
       searchParams: {
@@ -174,7 +221,7 @@ export default class {
     }
 
     const { playlistVideos, videoDetails } =
-      await this.fetchPlaylistItemsAndDetails(listId, playlist);
+      await this.fetchPlaylistItemsAndDetails(listId, playlist, limit);
 
     const queuedPlaylist = {
       title: playlist.snippet.title,
@@ -211,6 +258,7 @@ export default class {
   private async fetchPlaylistItemsAndDetails(
     listId: string,
     playlist: PlaylistResponse,
+    limit?: number,
   ): Promise<{
     playlistVideos: PlaylistItem[];
     videoDetails: VideoDetailsResponse[];
@@ -220,30 +268,28 @@ export default class {
     const videoDetails: VideoDetailsResponse[] = [];
 
     let nextToken: string | undefined;
+    const targetCount = Math.min(
+      playlist.contentDetails.itemCount,
+      limit ?? Number.POSITIVE_INFINITY,
+    );
 
-    while (playlistVideos.length < playlist.contentDetails.itemCount) {
-      const playlistItemsParams = {
-        searchParams: {
-          part: "id, contentDetails",
-          playlistId: listId,
-          maxResults: "50",
-          pageToken: nextToken,
-        },
-      };
-
-      const { items, nextPageToken } = await this.cache.wrap(
-        async () =>
-          this.got(
-            "playlistItems",
-            playlistItemsParams,
-          ).json() as Promise<PlaylistItemsResponse>,
-        playlistItemsParams,
-        {
-          expiresIn: ONE_MINUTE_IN_SECONDS,
-        },
+    while (playlistVideos.length < targetCount) {
+      const { items, nextPageToken } = await this.fetchPlaylistItemsPage(
+        listId,
+        Math.min(50, targetCount - playlistVideos.length),
+        nextToken,
       );
 
       nextToken = nextPageToken;
+
+      // itemCount counts private and deleted videos that playlistItems never
+      // returns, so targetCount can be unreachable. Stop as soon as a page
+      // makes no progress; otherwise a missing token would have us request the
+      // first page forever.
+      if (items.length === 0) {
+        break;
+      }
+
       playlistVideos.push(...items);
 
       // Start fetching extra details about videos
@@ -256,11 +302,42 @@ export default class {
           videoDetails.push(...videoDetailItems);
         })(),
       );
+
+      if (!nextPageToken) {
+        break;
+      }
     }
 
     await Promise.all(videoDetailsPromises);
 
     return { playlistVideos, videoDetails };
+  }
+
+  private async fetchPlaylistItemsPage(
+    listId: string,
+    maxResults: number,
+    pageToken: string | undefined,
+  ): Promise<PlaylistItemsResponse> {
+    const playlistItemsParams = {
+      searchParams: {
+        part: "id, contentDetails",
+        playlistId: listId,
+        maxResults: maxResults.toString(),
+        pageToken,
+      },
+    };
+
+    return this.cache.wrap(
+      async () =>
+        this.got(
+          "playlistItems",
+          playlistItemsParams,
+        ).json() as Promise<PlaylistItemsResponse>,
+      playlistItemsParams,
+      {
+        expiresIn: ONE_MINUTE_IN_SECONDS,
+      },
+    );
   }
 
   private getMetadataFromVideo({

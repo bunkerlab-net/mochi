@@ -255,3 +255,34 @@ test("returns no songs for an unresolvable SoundCloud url", async () => {
   );
   expect(songs).toHaveLength(0);
 });
+
+test("resolves a YouTube Music channel url", async () => {
+  let args: unknown[] = [];
+  const youtube = {
+    getChannel: async (...received: unknown[]) => {
+      args = received;
+      return [ytSong("c1"), ytSong("c2")];
+    },
+  };
+  const [songs, msg] = await makeGetSongs(youtube).getSongs(
+    "https://music.youtube.com/channel/UC17Plu6pe6IJVXUttD2uIWA",
+    50,
+    false,
+  );
+  expect(songs).toHaveLength(2);
+  expect(msg).toBe("");
+  expect(args).toEqual(["UC17Plu6pe6IJVXUttD2uIWA", false, 50]);
+});
+
+test("notes truncation when a channel fills the playlist limit", async () => {
+  const youtube = {
+    getChannel: async () => [ytSong("c1"), ytSong("c2")],
+  };
+  const [songs, msg] = await makeGetSongs(youtube).getSongs(
+    "https://www.youtube.com/channel/UC17Plu6pe6IJVXUttD2uIWA/videos",
+    2,
+    false,
+  );
+  expect(songs).toHaveLength(2);
+  expect(msg).toBe("only the first 2 tracks were added");
+});
