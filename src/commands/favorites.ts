@@ -173,6 +173,10 @@ export default class implements Command {
       addToFrontOfQueue: interaction.options.getBoolean("immediate") ?? false,
       shouldSplitChapters: interaction.options.getBoolean("split") ?? false,
       skipCurrentTrack: interaction.options.getBoolean("skip") ?? false,
+      // /favorites use exposes no mix or autoplay options, so it stays on the
+      // guild autoplay setting and queues the query as-is.
+      queueMix: false,
+      sessionAutoplay: null,
     });
   }
 

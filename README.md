@@ -158,6 +158,12 @@ Mochi sources similar music two ways:
 
 Autoplay seeds from the last track, so it only continues when that track is a YouTube source; live streams and direct HTTP streams can't be seeded.
 
+`/play` and `/playnow` take an `autoplay:true|false` option that overrides the server setting for the current session only, so you can silence the radio for one listening session without touching `/config`. The override sticks for the rest of the session: a later `/play` that omits the option keeps it, and only an explicit `true`/`false` changes it. It ends with the session at `/stop` (or Mochi leaving an empty channel), after which the server setting applies again; `/disconnect` keeps it, since the queue survives.
+
+#### Mixes on demand
+
+`/play query:… mix:true` starts a YouTube mix (radio) immediately instead of waiting for the queue to empty: Mochi queues the track the query resolved, then fills up to the server's `playlist-limit` from that track's mix. A mix radiates from one video, so a query resolving several tracks (a playlist, album, or channel) keeps only the first as the seed. Mixes are a YouTube feature; other sources report that no mix is available.
+
 ### Custom bot status
 
 By default Mochi shows "Online" and "Listening to music". Override it with:

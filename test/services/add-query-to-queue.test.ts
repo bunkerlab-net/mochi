@@ -63,6 +63,7 @@ const make = (opts: {
   player: unknown;
   sponsorblock?: boolean;
   wrap?: (f: () => unknown) => Promise<unknown>;
+  autoplay?: unknown;
 }) =>
   new AddQueryToQueue(
     { getSongs: opts.getSongs } as never,
@@ -72,6 +73,7 @@ const make = (opts: {
       ENABLE_SPONSORBLOCK: opts.sponsorblock ?? false,
     } as never,
     { wrap: opts.wrap ?? (async (f: () => unknown) => f()) } as never,
+    (opts.autoplay ?? { getYouTubeMixSongs: async () => [] }) as never,
   );
 
 const interaction = () => {
@@ -102,6 +104,8 @@ const baseArgs = {
   shuffleAdditions: false,
   shouldSplitChapters: false,
   skipCurrentTrack: false,
+  queueMix: false,
+  sessionAutoplay: null,
 };
 
 beforeEach(() => {
@@ -440,4 +444,184 @@ test("skipNonMusicSegments: tolerates a non-Error rejection", async () => {
     cmd as unknown as { skipNonMusicSegments: (s: unknown) => Promise<unknown> }
   ).skipNonMusicSegments(input);
   expect(result).toBe(input);
+});
+
+// ---- mix ------------------------------------------------------------------
+const seedSong = song({ url: "AAAAAAAAAAA", title: "Seed" });
+
+test("mix: queues the seed track followed by its mix", async () => {
+  let received: { limit: number; exclude: Set<string> } | undefined;
+  const player = fakePlayer({
+    getCurrent: () => song({ url: "playing0000" }),
+    getQueue: () => [song({ url: "queued00000" })],
+  });
+  const cmd = make({
+    getSongs: async () => [[seedSong], ""],
+    player,
+    autoplay: {
+      getYouTubeMixSongs: async (
+        _seed: unknown,
+        opts: { limit: number; exclude: Set<string> },
+      ) => {
+        received = opts;
+        return [song({ url: "BBBBBBBBBBB" }), song({ url: "CCCCCCCCCCC" })];
+      },
+    },
+  });
+  const { interaction: i } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, queueMix: true, interaction: i });
+
+  expect(player.add).toHaveBeenCalledTimes(3);
+  // The seed takes one of the limit's slots.
+  expect(received?.limit).toBe(49);
+  // getQueue() omits the playing track, so it has to be excluded separately.
+  expect([...(received?.exclude ?? [])]).toEqual([
+    "AAAAAAAAAAA",
+    "playing0000",
+    "queued00000",
+  ]);
+});
+
+test("mix: keeps only the first track of a multi-track query", async () => {
+  const player = fakePlayer();
+  const cmd = make({
+    getSongs: async () => [[seedSong, song({ url: "second00000" })], ""],
+    player,
+    autoplay: {
+      getYouTubeMixSongs: async () => [song({ url: "BBBBBBBBBBB" })],
+    },
+  });
+  const { interaction: i, replies } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, queueMix: true, interaction: i });
+
+  expect(player.add).toHaveBeenCalledTimes(2);
+  const added = player.add.mock.calls.map(
+    (call) => (call[0] as { url: string }).url,
+  );
+  expect(added).toEqual(["AAAAAAAAAAA", "BBBBBBBBBBB"]);
+  expect(replies.at(-1)).toContain("a mix seeded by");
+});
+
+test("mix: reports that only YouTube tracks have mixes", async () => {
+  const player = fakePlayer();
+  const cmd = make({
+    getSongs: async () => [
+      [song({ source: MediaSource.SoundCloud, url: "https://sc/track" })],
+      "",
+    ],
+    player,
+  });
+  const { interaction: i, replies } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, queueMix: true, interaction: i });
+
+  expect(player.add).toHaveBeenCalledTimes(1);
+  expect(replies.at(-1)).toContain("only available for YouTube");
+});
+
+test("mix: collapses to the seed when the playlist limit leaves no room", async () => {
+  settings = { playlistLimit: 1, queueAddResponseEphemeral: false };
+  const player = fakePlayer();
+  const cmd = make({
+    getSongs: async () => [[seedSong, song({ url: "second00000" })], ""],
+    player,
+  });
+  const { interaction: i, replies } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, queueMix: true, interaction: i });
+
+  // The cap is deliberate, so the request collapses to its seed rather than
+  // queueing the untouched input past the limit.
+  expect(player.add).toHaveBeenCalledTimes(1);
+  expect(replies.at(-1)).toContain("left no room for a mix");
+});
+
+test("mix: reports when the track has no mix", async () => {
+  const cmd = make({
+    getSongs: async () => [[seedSong], ""],
+    player: fakePlayer(),
+  });
+  const { interaction: i, replies } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, queueMix: true, interaction: i });
+
+  expect(replies.at(-1)).toContain("no mix was found");
+});
+
+// ---- session autoplay override --------------------------------------------
+test("session autoplay: applies an explicit override to the player", async () => {
+  const player = fakePlayer({ sessionAutoplay: null });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, sessionAutoplay: false, interaction: i });
+
+  expect(player.sessionAutoplay).toBe(false);
+});
+
+test("session autoplay: omitting it keeps the guild setting in charge", async () => {
+  const player = fakePlayer({ sessionAutoplay: null });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+  const { interaction: i } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, interaction: i });
+
+  expect(player.sessionAutoplay).toBeNull();
+});
+
+test("session autoplay: an override survives later requests that omit it", async () => {
+  const player = fakePlayer({ sessionAutoplay: null });
+  const cmd = make({ getSongs: async () => [[song()], ""], player });
+
+  await cmd.addToQueue({
+    ...baseArgs,
+    sessionAutoplay: false,
+    interaction: interaction().interaction,
+  });
+  await cmd.addToQueue({ ...baseArgs, interaction: interaction().interaction });
+
+  // The override is scoped to the session, not to the one request that set it,
+  // so only an explicit true/false (or the session ending) changes it.
+  expect(player.sessionAutoplay).toBe(false);
+});
+
+test("mix: drops a resolution notice that no longer describes the queue", async () => {
+  const player = fakePlayer();
+  const cmd = make({
+    // What a capped channel query looks like: several tracks plus a notice.
+    getSongs: async () => [
+      [seedSong, song({ url: "second00000" })],
+      "only the first 2 tracks were added",
+    ],
+    player,
+    autoplay: {
+      getYouTubeMixSongs: async () => [song({ url: "BBBBBBBBBBB" })],
+    },
+  });
+  const { interaction: i, replies } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, queueMix: true, interaction: i });
+
+  const reply = replies.at(-1) as string;
+  expect(reply).toContain("a mix seeded by");
+  expect(reply).not.toContain("only the first");
+});
+
+test("mix: keeps a resolution notice when no mix could be built", async () => {
+  const cmd = make({
+    getSongs: async () => [
+      [song({ source: MediaSource.SoundCloud, url: "https://sc/track" })],
+      "only the first 2 tracks were added",
+    ],
+    player: fakePlayer(),
+  });
+  const { interaction: i, replies } = interaction();
+
+  await cmd.addToQueue({ ...baseArgs, queueMix: true, interaction: i });
+
+  const reply = replies.at(-1) as string;
+  expect(reply).toContain("only the first 2 tracks were added");
+  expect(reply).toContain("only available for YouTube");
 });

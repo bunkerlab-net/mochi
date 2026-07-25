@@ -42,7 +42,7 @@ export default class Autoplay {
     // fromLastfm self-guards when Last.fm is unconfigured, so query both blindly.
     const [fromLastfm, fromMix] = await Promise.all([
       this.fromLastfm(seed, limit, exclude),
-      this.fromYouTubeMix(seed, limit, exclude),
+      this.getYouTubeMixSongs(seed, { limit, exclude }),
     ]);
 
     // Both paths key on the bare 11-char YouTube id in `.url`, so one set dedupes
@@ -117,10 +117,13 @@ export default class Autoplay {
     return songs;
   }
 
-  private async fromYouTubeMix(
-    seed: QueuedSong,
-    limit: number,
-    exclude: ReadonlySet<string>,
+  /**
+   * Tracks from a video's auto-generated YouTube radio mix. Public so `/play`
+   * can queue a mix on demand, not only when the queue runs dry.
+   */
+  async getYouTubeMixSongs(
+    seed: SongMetadata,
+    { limit, exclude }: { limit: number; exclude: ReadonlySet<string> },
   ): Promise<SongMetadata[]> {
     // The radio mix is keyed off a YouTube video id; HLS/livestream seeds and
     // anything without a real id can't be seeded.

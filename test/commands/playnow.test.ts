@@ -19,11 +19,11 @@ test("constructor: registers the playnow slash command", () => {
   expect(makePlayNow().slashCommand.name).toBe("playnow");
 });
 
-test("constructor: exposes only query, shuffle, and split options", () => {
+test("constructor: exposes the query and per-request toggles", () => {
   const names = makePlayNow()
     .slashCommand.toJSON()
     .options?.map((option) => option.name);
-  expect(names).toEqual(["query", "shuffle", "split"]);
+  expect(names).toEqual(["query", "shuffle", "split", "mix", "autoplay"]);
 });
 
 test("constructor: query description omits Spotify without a third party", () => {
@@ -50,7 +50,7 @@ test("execute: forces front-of-queue and skip, forwarding shuffle/split", async 
   const cmd = makePlayNow(addToQueue);
   const { interaction } = fakeInteraction({
     strings: { query: "  never gonna  " },
-    booleans: { shuffle: true, split: true },
+    booleans: { shuffle: true, split: true, mix: true, autoplay: false },
   });
 
   await cmd.execute(interaction);
@@ -62,6 +62,8 @@ test("execute: forces front-of-queue and skip, forwarding shuffle/split", async 
   expect(arg.skipCurrentTrack).toBe(true);
   expect(arg.shuffleAdditions).toBe(true);
   expect(arg.shouldSplitChapters).toBe(true);
+  expect(arg.queueMix).toBe(true);
+  expect(arg.sessionAutoplay).toBe(false);
 });
 
 test("autocomplete: inherited from play, returns suggestions", async () => {
