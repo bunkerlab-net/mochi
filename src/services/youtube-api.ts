@@ -45,6 +45,14 @@ interface PlaylistResponse {
   };
 }
 
+interface ChannelResponse {
+  contentDetails: {
+    relatedPlaylists: {
+      uploads?: string;
+    };
+  };
+}
+
 interface PlaylistItemsResponse {
   items: PlaylistItem[];
   nextPageToken?: string;
@@ -146,16 +154,52 @@ export default class {
     return this.getMetadataFromVideo({ video, shouldSplitChapters });
   }
 
-  async getPlaylist(
-    listId: string,
+  /**
+   * Resolve a channel (a YouTube Music artist page is one) to its uploads
+   * playlist, which holds every track the channel published. Capped at `limit`
+   * because channels routinely hold thousands of uploads.
+   */
+  async getChannel(
+    channelId: string,
     shouldSplitChapters: boolean,
-  ): Promise<SongMetadata[]> {
+    limit: number,
+  ): Promise<{ songs: SongMetadata[]; truncated: boolean }> {
+    const channelParams = {
+      searchParams: {
+        part: "contentDetails",
+        id: channelId,
+      },
+    };
+
+    const { items: channels } = await this.cache.wrap(
+      async () =>
+        this.got("channels", channelParams).json() as Promise<{
+          items: ChannelResponse[];
+        }>,
+      channelParams,
+      {
+        expiresIn: ONE_HOUR_IN_SECONDS,
+      },
+    );
+
+    const uploadsListId =
+      channels.at(0)?.contentDetails.relatedPlaylists.uploads;
+
+    if (!uploadsListId) {
+      throw new Error("Channel could not be found.");
+    }
+
+    return this.getPlaylist(uploadsListId, shouldSplitChapters, limit);
+  }
+
+  private async fetchPlaylist(listId: string): Promise<PlaylistResponse> {
     const playlistParams = {
       searchParams: {
         part: "id, snippet, contentDetails",
         id: listId,
       },
     };
+
     const { items: playlists } = await this.cache.wrap(
       async () =>
         this.got("playlists", playlistParams).json() as Promise<{
@@ -173,15 +217,30 @@ export default class {
       throw new Error("Playlist could not be found.");
     }
 
+    return playlist;
+  }
+
+  /**
+   * Resolve a playlist to queueable tracks. `limit` caps the tracks returned.
+   * Chapter splitting turns one video into several, so the cap only holds once
+   * that expansion is done; `truncated` says whether it left tracks out.
+   */
+  async getPlaylist(
+    listId: string,
+    shouldSplitChapters: boolean,
+    limit?: number,
+  ): Promise<{ songs: SongMetadata[]; truncated: boolean }> {
+    const playlist = await this.fetchPlaylist(listId);
+
     const { playlistVideos, videoDetails } =
-      await this.fetchPlaylistItemsAndDetails(listId, playlist);
+      await this.fetchPlaylistItemsAndDetails(listId, playlist, limit);
 
     const queuedPlaylist = {
       title: playlist.snippet.title,
       source: playlist.id,
     };
 
-    const songsToReturn: SongMetadata[] = [];
+    const songs: SongMetadata[] = [];
 
     for (const video of playlistVideos) {
       try {
@@ -192,7 +251,7 @@ export default class {
           continue;
         }
 
-        songsToReturn.push(
+        songs.push(
           ...this.getMetadataFromVideo({
             video: videoDetail,
             queuedPlaylist,
@@ -205,12 +264,23 @@ export default class {
       }
     }
 
-    return songsToReturn;
+    // Videos the cap kept us from fetching, plus tracks trimmed after chapter
+    // splitting expanded the videos we did fetch.
+    const truncated =
+      limit !== undefined &&
+      (limit < playlist.contentDetails.itemCount || songs.length > limit);
+
+    if (limit !== undefined && songs.length > limit) {
+      songs.length = limit;
+    }
+
+    return { songs, truncated };
   }
 
   private async fetchPlaylistItemsAndDetails(
     listId: string,
     playlist: PlaylistResponse,
+    limit?: number,
   ): Promise<{
     playlistVideos: PlaylistItem[];
     videoDetails: VideoDetailsResponse[];
@@ -220,30 +290,28 @@ export default class {
     const videoDetails: VideoDetailsResponse[] = [];
 
     let nextToken: string | undefined;
+    const targetCount = Math.min(
+      playlist.contentDetails.itemCount,
+      limit ?? Number.POSITIVE_INFINITY,
+    );
 
-    while (playlistVideos.length < playlist.contentDetails.itemCount) {
-      const playlistItemsParams = {
-        searchParams: {
-          part: "id, contentDetails",
-          playlistId: listId,
-          maxResults: "50",
-          pageToken: nextToken,
-        },
-      };
-
-      const { items, nextPageToken } = await this.cache.wrap(
-        async () =>
-          this.got(
-            "playlistItems",
-            playlistItemsParams,
-          ).json() as Promise<PlaylistItemsResponse>,
-        playlistItemsParams,
-        {
-          expiresIn: ONE_MINUTE_IN_SECONDS,
-        },
+    while (playlistVideos.length < targetCount) {
+      const { items, nextPageToken } = await this.fetchPlaylistItemsPage(
+        listId,
+        Math.min(50, targetCount - playlistVideos.length),
+        nextToken,
       );
 
       nextToken = nextPageToken;
+
+      // itemCount counts private and deleted videos that playlistItems never
+      // returns, so targetCount can be unreachable. Stop as soon as a page
+      // makes no progress; otherwise a missing token would have us request the
+      // first page forever.
+      if (items.length === 0) {
+        break;
+      }
+
       playlistVideos.push(...items);
 
       // Start fetching extra details about videos
@@ -256,11 +324,42 @@ export default class {
           videoDetails.push(...videoDetailItems);
         })(),
       );
+
+      if (!nextPageToken) {
+        break;
+      }
     }
 
     await Promise.all(videoDetailsPromises);
 
     return { playlistVideos, videoDetails };
+  }
+
+  private async fetchPlaylistItemsPage(
+    listId: string,
+    maxResults: number,
+    pageToken: string | undefined,
+  ): Promise<PlaylistItemsResponse> {
+    const playlistItemsParams = {
+      searchParams: {
+        part: "id, contentDetails",
+        playlistId: listId,
+        maxResults: maxResults.toString(),
+        pageToken,
+      },
+    };
+
+    return this.cache.wrap(
+      async () =>
+        this.got(
+          "playlistItems",
+          playlistItemsParams,
+        ).json() as Promise<PlaylistItemsResponse>,
+      playlistItemsParams,
+      {
+        expiresIn: ONE_MINUTE_IN_SECONDS,
+      },
+    );
   }
 
   private getMetadataFromVideo({

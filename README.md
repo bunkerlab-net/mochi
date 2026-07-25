@@ -21,6 +21,7 @@ Mochi is a self-hosted Discord music bot for small to medium servers — think a
 - 📋 No vote-to-skip — playback is controlled directly
 - ↔️ Autoconverts playlists / artists / albums / songs from Spotify
 - 🟠 Plays SoundCloud tracks, sets, and user profiles directly — no API key needed
+- 🎤 Queues an artist's or channel's tracks from a YouTube / YouTube Music channel link
 - ⭐ Users can save favorite queries for reuse
 - 1️⃣ A single instance supports multiple guilds
 - 🔊 Configurable volume controls, including optional ducking when people speak

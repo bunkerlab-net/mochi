@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add a `/playnow` command that jumps a song to the front of the queue and starts it immediately, skipping the current track. It takes the same query (with autocomplete) and optional `shuffle`/`split` options as `/play`; on an empty or idle queue it simply starts the requested song instead of skipping past it.
 - Skipping while paused now continues playback: `/skip`, `/next`, and `/playnow` start the next track (or an autoplay pick at the end of the queue) even when the player was paused, instead of stopping.
+- Accept YouTube and YouTube Music channel links in `/play`: pasting a link such as `https://music.youtube.com/channel/UC17Plu6pe6IJVXUttD2uIWA` now queues that channel's (or artist's) tracks instead of searching YouTube for the URL text. Tracks come from the channel's uploads, newest first, capped by the server's `playlist-limit` setting (Mochi says so in its reply when the cap is hit).
+- Fix YouTube playlists that contain private or deleted videos queueing the same tracks repeatedly: YouTube counts those videos in the playlist total but never returns them, so Mochi kept re-requesting the first page trying to reach the count. It now stops when YouTube reports no further pages.
 
 ## [3.2.2] - 2026-06-20
 
