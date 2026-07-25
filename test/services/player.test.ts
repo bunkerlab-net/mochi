@@ -703,6 +703,31 @@ test("tryAutoplay: returns false when no related songs are found", async () => {
   expect(await player.tryAutoplay()).toBe(false);
 });
 
+test("tryAutoplay: a session override turns autoplay on despite the setting", async () => {
+  settings.autoplay = false;
+  autoplay.getRelatedSongs = async () => [song({ url: "related" })];
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.sessionAutoplay = true;
+  expect(await player.tryAutoplay()).toBe(true);
+  expect(player.getQueue().at(-1)?.url).toBe("related");
+});
+
+test("tryAutoplay: a session override turns autoplay off despite the setting", async () => {
+  autoplay.getRelatedSongs = async () => [song({ url: "related" })];
+  const player = makePlayer();
+  player.add(song({ url: "a" }));
+  player.sessionAutoplay = false;
+  expect(await player.tryAutoplay()).toBe(false);
+});
+
+test("forget: drops the session autoplay override", () => {
+  const player = makePlayer();
+  player.sessionAutoplay = false;
+  player.forget();
+  expect(player.sessionAutoplay).toBeNull();
+});
+
 test("tryAutoplay: returns false and logs when the lookup throws", async () => {
   autoplay.getRelatedSongs = async () => {
     throw new Error("lastfm down");

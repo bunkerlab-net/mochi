@@ -117,6 +117,11 @@ export default class {
   public guildId: string;
   public loopCurrentSong = false;
   public loopCurrentQueue = false;
+  // Per-session override of the guild `autoplay` setting; null follows the
+  // setting. Cleared by forget(), which every real session teardown runs (stop
+  // and the idle-disconnect timer), so an override never leaks into the next
+  // session. leave() keeps it, because that queue is still the same session.
+  public sessionAutoplay: boolean | null = null;
   private currentChannel: VoiceChannel | undefined;
   private queue: QueuedSong[] = [];
   private queuePosition = 0;
@@ -951,16 +956,18 @@ export default class {
   /**
    * When the queue empties, seed more music similar to the track that just
    * finished and keep playing (radio mode). Controlled per-guild by the
-   * `autoplay` setting. Returns true if playback continued, false if the caller
-   * should fall back to the normal end-of-queue behavior.
+   * `autoplay` setting, which `sessionAutoplay` overrides for the session.
+   * Returns true if playback continued, false if the caller should fall back to
+   * the normal end-of-queue behavior.
    */
   private async tryAutoplay(): Promise<boolean> {
     if (!this.autoplay) {
       return false;
     }
 
-    const settings = await getGuildSettings(this.guildId);
-    if (!settings.autoplay) {
+    const enabled =
+      this.sessionAutoplay ?? (await getGuildSettings(this.guildId)).autoplay;
+    if (!enabled) {
       return false;
     }
 
@@ -1252,6 +1259,7 @@ export default class {
   // does not rejoin or resume after the user told it to leave.
   forget(): void {
     clearPlayerState(this.guildId);
+    this.sessionAutoplay = null;
   }
 
   // Leave the voice channel but keep the queue, persisting it without a channel

@@ -43,6 +43,10 @@ test("execute: forwards a trimmed query and options to the queue", async () => {
   expect(arg.addToFrontOfQueue).toBe(true);
   expect(arg.skipCurrentTrack).toBe(true);
   expect(arg.shuffleAdditions).toBe(false);
+  // Omitted toggles: mix stays off, and a null autoplay leaves the guild
+  // setting in charge.
+  expect(arg.queueMix).toBe(false);
+  expect(arg.sessionAutoplay).toBeNull();
 });
 
 test("autocomplete: responds empty for a blank query", async () => {

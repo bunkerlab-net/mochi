@@ -95,6 +95,18 @@ export default class implements Command {
         option
           .setName("split")
           .setDescription("if a track has chapters, split it"),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName("mix")
+          .setDescription("also queue the YouTube mix (radio) for the track"),
+      )
+      .addBooleanOption((option) =>
+        option
+          .setName("autoplay")
+          .setDescription(
+            "keep playing similar music when the queue ends, this session only",
+          ),
       );
 
     if (includeImmediateAndSkip) {
@@ -136,6 +148,11 @@ export default class implements Command {
       addToFrontOfQueue,
       shuffleAdditions: interaction.options.getBoolean("shuffle") ?? false,
       shouldSplitChapters: interaction.options.getBoolean("split") ?? false,
+      queueMix: interaction.options.getBoolean("mix") ?? false,
+      // null when the option is omitted, which changes nothing: the session
+      // keeps the guild setting, or an override set earlier in the session.
+      // Only an explicit true/false moves it.
+      sessionAutoplay: interaction.options.getBoolean("autoplay"),
       skipCurrentTrack,
     });
   }

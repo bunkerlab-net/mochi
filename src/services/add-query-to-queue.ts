@@ -19,6 +19,7 @@ import { NoNextTrackError } from "../utils/errors.js";
 import { getGuildSettings } from "../utils/get-guild-settings.js";
 import { getGuild, getGuildId, getMemberUserId } from "../utils/interaction.js";
 import logger from "../utils/logger.js";
+import type Autoplay from "./autoplay.js";
 import type Config from "./config.js";
 import type KeyValueCacheProvider from "./key-value-cache.js";
 import type Player from "./player.js";
@@ -42,6 +43,7 @@ export default class AddQueryToQueue {
     private readonly playerManager: PlayerManager,
     @inject(TYPES.Config) private readonly config: Config,
     @inject(TYPES.KeyValueCache) cache: KeyValueCacheProvider,
+    @inject(TYPES.Services.Autoplay) private readonly autoplay: Autoplay,
   ) {
     this.sponsorBlockTimeoutDelay = config.SPONSORBLOCK_TIMEOUT;
     this.sponsorBlock = config.ENABLE_SPONSORBLOCK
@@ -55,6 +57,8 @@ export default class AddQueryToQueue {
     addToFrontOfQueue,
     shuffleAdditions,
     shouldSplitChapters,
+    queueMix,
+    sessionAutoplay,
     skipCurrentTrack,
     interaction,
   }: {
@@ -62,6 +66,8 @@ export default class AddQueryToQueue {
     addToFrontOfQueue: boolean;
     shuffleAdditions: boolean;
     shouldSplitChapters: boolean;
+    queueMix: boolean;
+    sessionAutoplay: boolean | null;
     skipCurrentTrack: boolean;
     interaction: ChatInputCommandInteraction;
   }): Promise<void> {
@@ -82,9 +88,16 @@ export default class AddQueryToQueue {
       addToFrontOfQueue,
       shuffleAdditions,
       shouldSplitChapters,
+      queueMix,
       player,
       interaction,
     });
+
+    // Session-scoped autoplay override, applied once the query actually
+    // queued something. player.forget() drops it when the session ends.
+    if (sessionAutoplay !== null) {
+      player.sessionAutoplay = sessionAutoplay;
+    }
 
     const extraMsg = await this.connectAndPlay(
       player,
@@ -158,6 +171,7 @@ export default class AddQueryToQueue {
     addToFrontOfQueue,
     shuffleAdditions,
     shouldSplitChapters,
+    queueMix,
     player,
     interaction,
   }: {
@@ -165,6 +179,7 @@ export default class AddQueryToQueue {
     addToFrontOfQueue: boolean;
     shuffleAdditions: boolean;
     shouldSplitChapters: boolean;
+    queueMix: boolean;
     player: Player;
     interaction: ChatInputCommandInteraction;
   }): Promise<{
@@ -181,15 +196,13 @@ export default class AddQueryToQueue {
       queueAddResponseEphemeral ? { flags: MessageFlags.Ephemeral } : {},
     );
 
-    let [newSongs, extraMsg] = await this.getSongs.getSongs(
+    let [newSongs, extraMsg] = await this.resolveSongs({
       query,
       playlistLimit,
       shouldSplitChapters,
-    );
-
-    if (newSongs.length === 0) {
-      throw new Error("no songs found");
-    }
+      queueMix,
+      player,
+    });
 
     if (shuffleAdditions) {
       newSongs = shuffle(newSongs);
@@ -219,6 +232,129 @@ export default class AddQueryToQueue {
     }
 
     return { newSongs, firstSong, currentBeforeEnqueue, extraMsg };
+  }
+
+  // Resolve a query into the tracks to enqueue, turning it into a YouTube mix
+  // first when the request asked for one.
+  private async resolveSongs({
+    query,
+    playlistLimit,
+    shouldSplitChapters,
+    queueMix,
+    player,
+  }: {
+    query: string;
+    playlistLimit: number;
+    shouldSplitChapters: boolean;
+    queueMix: boolean;
+    player: Player;
+  }): Promise<[SongMetadata[], string]> {
+    const [songs, resolutionMsg] = await this.getSongs.getSongs(
+      query,
+      playlistLimit,
+      shouldSplitChapters,
+    );
+
+    if (songs.length === 0) {
+      throw new Error("no songs found");
+    }
+
+    if (!queueMix) {
+      return [songs, resolutionMsg];
+    }
+
+    const mix = await this.expandToMix({
+      songs,
+      limit: playlistLimit,
+      player,
+      resolutionMsg,
+    });
+
+    return [mix.songs, mix.message];
+  }
+
+  // Turn a resolved query into its first track plus that track's YouTube radio
+  // mix, the way YouTube's "start radio" works. A mix radiates from one video,
+  // so the rest of a multi-track query is dropped rather than interleaved with
+  // unrelated radio picks, and `resolutionMsg` (a channel's truncation notice,
+  // say) is dropped with it once it stops describing the queue. Every dead end
+  // carries a message, so `mix:true` is never quietly unhonored.
+  private async expandToMix({
+    songs,
+    limit,
+    player,
+    resolutionMsg,
+  }: {
+    songs: SongMetadata[];
+    limit: number;
+    player: Player;
+    resolutionMsg: string;
+  }): Promise<{ songs: SongMetadata[]; message: string }> {
+    const seed = songs[0];
+
+    if (
+      !seed ||
+      seed.source !== MediaSource.Youtube ||
+      seed.url.length !== 11
+    ) {
+      return {
+        songs,
+        message: [resolutionMsg, "a mix is only available for YouTube tracks"]
+          .filter(Boolean)
+          .join(", "),
+      };
+    }
+
+    // The seed takes one of the limit's slots. With no room left the request
+    // still collapses to its seed: the cap is deliberate, so honoring both it
+    // and the single-seed contract beats queueing the untouched input.
+    const mixLimit = limit - 1;
+
+    if (mixLimit <= 0) {
+      return {
+        songs: [seed],
+        message: "the playlist limit left no room for a mix",
+      };
+    }
+
+    const mix = await this.autoplay.getYouTubeMixSongs(seed, {
+      limit: mixLimit,
+      exclude: this.urlsInPlay(player, seed),
+    });
+
+    // A missing radio is an accident (yt-dlp hiccup, no mix for the video), not
+    // a reason to throw away what the query did resolve.
+    if (mix.length === 0) {
+      return {
+        songs,
+        message: [resolutionMsg, "no mix was found for that track"]
+          .filter(Boolean)
+          .join(", "),
+      };
+    }
+
+    logger.info(
+      "queue",
+      `mix seeded by "${seed.title}" added ${mix.length} track(s)`,
+    );
+
+    return {
+      songs: [seed, ...mix],
+      message:
+        songs.length > 1 ? `a mix seeded by "${seed.title}" was queued` : "",
+    };
+  }
+
+  // Everything the mix must not repeat. getQueue() starts after the current
+  // track, so the playing song has to be listed on its own.
+  private urlsInPlay(player: Player, seed: SongMetadata): Set<string> {
+    const current = player.getCurrent();
+
+    return new Set([
+      seed.url,
+      ...(current ? [current.url] : []),
+      ...player.getQueue().map((song) => song.url),
+    ]);
   }
 
   private addSongsToQueue({

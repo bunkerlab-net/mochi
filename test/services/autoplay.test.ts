@@ -193,3 +193,37 @@ test("combines Last.fm and YouTube mix results, deduped across sources", async (
     "SHARED00001",
   ]);
 });
+
+test("getYouTubeMixSongs: maps mix entries and skips excluded ids", async () => {
+  mixEntries = [
+    { id: "AAAAAAAAAAA", title: "Already queued", uploader: "Up", duration: 1 },
+    { id: "DDDDDDDDDDD", title: "Fresh", uploader: "Uploader", duration: 90 },
+  ];
+
+  const songs = await makeAutoplay({
+    search: async () => [],
+  }).getYouTubeMixSongs(seed(), {
+    limit: 5,
+    exclude: new Set(["AAAAAAAAAAA"]),
+  });
+
+  expect(songs.map((song) => song.url)).toEqual(["DDDDDDDDDDD"]);
+  expect(songs[0]?.title).toBe("Fresh");
+  expect(songs[0]?.artist).toBe("Uploader");
+  expect(songs[0]?.length).toBe(90);
+});
+
+test("getYouTubeMixSongs: returns nothing for a non-YouTube seed", async () => {
+  mixEntries = [
+    { id: "DDDDDDDDDDD", title: "Fresh", uploader: "Uploader", duration: 90 },
+  ];
+
+  const songs = await makeAutoplay({
+    search: async () => [],
+  }).getYouTubeMixSongs(seed({ source: MediaSource.SoundCloud }), {
+    limit: 5,
+    exclude: new Set(),
+  });
+
+  expect(songs).toEqual([]);
+});
