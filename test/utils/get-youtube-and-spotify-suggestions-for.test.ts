@@ -1,17 +1,27 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, spyOn, test } from "bun:test";
 import type SpotifyWebApi from "spotify-web-api-node";
+import getSuggestions, {
+  SpotifySuggestionsUnavailableError,
+} from "../../src/utils/get-youtube-and-spotify-suggestions-for.js";
+import * as youtubeSuggestions from "../../src/utils/get-youtube-suggestions-for.js";
 
 // getYouTubeAndSpotifySuggestionsFor calls getYouTubeSuggestionsFor (a network
-// call) internally; mock it so we exercise only the merge/limit logic. The
+// call) internally; spy on it so we exercise only the merge/limit logic. The
 // spotify client is a constructor param, so we inject a fake directly.
+//
+// A spy (not mock.module) because bun's module registry is shared by every test
+// file in the process: a module override outlives this file and feeds the fake
+// to test/utils/get-youtube-suggestions-for.test.ts, which imports the real
+// module. mockRestore() puts the real export back.
 let ytSuggestions: string[] = [];
 
-mock.module("../../src/utils/get-youtube-suggestions-for.js", () => ({
-  default: async () => ytSuggestions,
-}));
+const youtubeSpy = spyOn(youtubeSuggestions, "default").mockImplementation(
+  async () => ytSuggestions,
+);
 
-const { default: getSuggestions, SpotifySuggestionsUnavailableError } =
-  await import("../../src/utils/get-youtube-and-spotify-suggestions-for.js");
+afterAll(() => {
+  youtubeSpy.mockRestore();
+});
 
 const spotifyOk = (response: unknown) =>
   ({ search: async () => ({ body: response }) }) as unknown as SpotifyWebApi;
