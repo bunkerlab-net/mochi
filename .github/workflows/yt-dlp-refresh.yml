@@ -22,7 +22,7 @@ permissions: {}
 jobs:
   refresh:
     name: Build image with latest yt-dlp
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
