@@ -68,7 +68,7 @@ jobs:
         run: echo "$DOCKER_METADATA_OUTPUT_JSON" > /tmp/metadata.json
 
       - name: Upload metadata
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: metadata
           path: /tmp/metadata.json
@@ -79,14 +79,14 @@ jobs:
           echo "${{ github.sha }}" > /tmp/sha.txt
 
       - name: Upload SHA
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sha
           path: /tmp/sha.txt
           overwrite: true
 
       - name: Upload image
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-${{ matrix.platform_pair }}
           path: /tmp/image-${{ matrix.platform_pair }}.tar
@@ -99,7 +99,7 @@ jobs:
           PR_NUMBER: ${{ github.event.number }}
         run: echo "$PR_NUMBER" > /tmp/pull_request_number.txt
       - name: Upload PR number
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: pull_request_number
           path: /tmp/pull_request_number.txt
