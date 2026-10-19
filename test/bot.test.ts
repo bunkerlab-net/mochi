@@ -1,4 +1,5 @@
 import { expect, mock, test } from "bun:test";
+import * as voice from "@discordjs/voice";
 import { type Client, Collection } from "discord.js";
 
 // Only @discordjs/rest needs mocking: handleReady builds a REST client and calls
@@ -18,6 +19,14 @@ mock.module("@discordjs/rest", () => ({
 // do not depend on persisted state.
 mock.module("../src/utils/restore-players.js", () => ({
   default: async () => {},
+}));
+
+// handleReady calls generateDependencyReport, which runs `ffmpeg -h` via a
+// blocking spawnSync. Stub it so the test never runs a real ffmpeg binary.
+// Spread the real module so other @discordjs/voice exports stay intact.
+mock.module("@discordjs/voice", () => ({
+  ...voice,
+  generateDependencyReport: () => "",
 }));
 
 // Import inversify.config before bot.js to mirror the app's load order; bot.js
