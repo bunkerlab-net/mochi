@@ -68,14 +68,14 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/node": "^24.19.2",
     "@types/spotify-web-api-node": "^5.0.11",
-    "@types/ws": "8.18.2",
+    "@types/ws": "8.18.1",
     "drizzle-kit": "^0.31.11",
     "release-it": "^21.1.1",
     "sort-package-json": "^4.1.0",
     "type-fest": "^5.10.0",
     "typescript": "^7.0.2"
   },
-  "packageManager": "bun@1.4.3",
+  "packageManager": "bun@1.4.4",
   "engines": {
     "node": "^24.x"
   },
