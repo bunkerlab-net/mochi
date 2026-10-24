@@ -1,4 +1,5 @@
 ---
+
 name: Support request
 about: Something's not working like it should be
 title: ''

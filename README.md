@@ -31,7 +31,6 @@ Mochi is a self-hosted Discord music bot for small to medium servers — think a
 ## Stack
 
 Mochi runs entirely on [Bun](https://bun.com) — runtime, package manager, and bundler.
-
 - **Runtime:** Bun `1.3.14` (Node.js 24+ compatible)
 - **Language:** TypeScript 6 (strict)
 - **Discord:** discord.js 14 + `@discordjs/voice`
@@ -42,7 +41,6 @@ Mochi runs entirely on [Bun](https://bun.com) — runtime, package manager, and 
 ## Requirements
 
 Running Mochi needs a Discord token and a YouTube API key. Spotify and Last.fm keys are optional — Spotify keys enable Spotify URL conversion, and a Last.fm key improves [autoplay](#autoplay) recommendations:
-
 - `DISCORD_TOKEN` — create a 'New Application' [here](https://discord.com/developers/applications), then add a 'Bot'.
 - `YOUTUBE_API_KEY` — [create a project](https://console.developers.google.com), enable the YouTube Data API, and create an API key under credentials.
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` (optional) — create a Client ID [here](https://developer.spotify.com/dashboard/applications).
@@ -59,7 +57,6 @@ You can run Mochi with Docker (recommended) or from source with Bun.
 ### 🐳 Docker
 
 Available image tags:
-
 - `:latest` — the most recent release
 - `:3`, `:3.0`, `:3.0.0` — semver major / minor / exact
 - `:yt-dlp-latest` — the latest release rebuilt with the newest available `yt-dlp`
@@ -102,7 +99,6 @@ Keep the same `DISCORD_TOKEN`, reuse the same `/data` volume, and point the serv
 ### From source (Bun)
 
 **Prerequisites:**
-
 - [Bun](https://bun.com) `1.3.14` or newer
 - Node.js 24 or newer
 - `ffmpeg` (4.1 or later)
@@ -125,7 +121,6 @@ All settings below are environment variables (set them in your `.env` file or co
 ### Logging
 
 Mochi logs through [pino](https://getpino.io). Two environment variables control output:
-
 - `LOG_FORMAT` (default `plain`): `plain` for human-readable colorized lines, `json` for one JSON record per line, or `ecs` for [Elastic Common Schema](https://www.elastic.co/guide/en/ecs/current/index.html) JSON (for log shippers).
 - `LOG_LEVEL` (default `info`): one of `trace`, `debug`, `info`, `warn`, `error`, `fatal`, or `silent`. Operational events and failures log at `info` and above; set `LOG_LEVEL=debug` for verbose per-component detail.
 
@@ -152,7 +147,6 @@ Because SponsorBlock is a public service, it may be down or overloaded. When tha
 When the queue runs out, Mochi keeps the music going by finding tracks similar to the one that just played (radio mode) instead of falling silent. It's **on by default** — toggle it per-server with `/config set autoplay true|false`, and check the current state with `/config get autoplay`.
 
 Mochi sources similar music two ways:
-
 - **Last.fm** (preferred) — when `LASTFM_API_KEY` is set, Mochi uses Last.fm's similar-track recommendations and resolves them to playable YouTube videos. Create a key via a Last.fm [API account](https://www.last.fm/api/account/create); only the issued **API key** is needed.
 - **YouTube mixes** (fallback) — when no Last.fm key is set, or Last.fm returns nothing, Mochi seeds YouTube's auto-generated radio mix for the last track. This needs no extra configuration.
 
@@ -167,7 +161,6 @@ Autoplay seeds from the last track, so it only continues when that track is a Yo
 ### Custom bot status
 
 By default Mochi shows "Online" and "Listening to music". Override it with:
-
 - `BOT_STATUS`: `online`, `idle` (Away), or `dnd` (Do Not Disturb)
 - `BOT_ACTIVITY_TYPE`: `PLAYING`, `LISTENING`, `WATCHING`, or `STREAMING`
 - `BOT_ACTIVITY`: the text that follows the activity type
@@ -199,7 +192,6 @@ If Mochi runs in many guilds (10+), you may want to register commands bot-wide i
 ### Turn down volume when people speak
 
 Configure Mochi to automatically duck the volume while people are speaking:
-
 - `/config set reduce-vol-when-voice true` — enable automatic volume reduction
 - `/config set reduce-vol-when-voice false` — disable it
 - `/config set reduce-vol-when-voice-target <volume>` — target volume percentage while people speak (0–100, default 20)

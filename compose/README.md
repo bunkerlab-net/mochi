@@ -16,7 +16,6 @@ It does more than the single-container example in the [root README](../README.md
 Mochi resolves media with `yt-dlp`, and YouTube rate-limits and bot-checks requests from datacenter IP ranges (the usual `429` and "Sign in to confirm you're not a bot" failures). Sending the bot's traffic through Cloudflare WARP gives it a residential-style consumer IP, which avoids most of that throttling.
 
 The wiring is `network_mode: service:warp` on the `mochi` service: Mochi shares the `warp` container's network namespace instead of getting its own, with a few consequences:
-
 - All of Mochi's outbound traffic leaves through the WARP container.
 - Mochi has no network of its own, so it cannot publish ports. That is fine, since Mochi only makes outbound connections (Discord gateway and voice). To expose a port for it, add the mapping to the `warp` service instead.
 - The WARP SOCKS5 proxy is published on `1080`, reachable at `localhost:1080` inside the shared namespace.
